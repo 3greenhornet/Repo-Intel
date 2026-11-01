@@ -1,0 +1,21 @@
+name: Security audit
+
+# FIX-022: weekly dependency vulnerability scan (pip-audit) plus a
+# workflow_dispatch trigger for on-demand runs.
+on:
+  schedule:
+    - cron: '0 8 * * 1'  # Mondays 08:00 UTC
+  workflow_dispatch:
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      # 2026 hardening: pin the scanner version — the Trivy-in-LiteLLM
+      # supply-chain incident showed the scanner itself can be a vector.
+      - run: pip install pip-audit==2.7.3
+      - run: pip-audit -r backend/requirements.in --strict

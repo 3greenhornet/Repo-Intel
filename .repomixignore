@@ -1,0 +1,28 @@
+repomix-output.xml
+
+# Previously generated outputs
+repomix-output.xml
+repointel-full-codebase.md
+
+# Logs and generated data
+*.log
+*.jsonl
+*.xml
+*.txt
+profiles/**
+outputs/**
+logs/**
+baseline/baseline_events/**
+
+# Environment and backups
+.env
+backup_*.sql
+
+# Python and Git clutter
+__pycache__/**
+.venv/**
+venv/**
+.git/**
+bundle.py
+
+repointel-full-codebase.md

@@ -1,0 +1,31 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+*.db
+*.db-*
+.env
+node_modules/
+dist/
+# FIX-023: trained model artifacts are never committed (trained at build time)
+backend/models/trained/*.pkl
+# FIX-021: lock artifacts stay tracked; local tooling state does not
+.ruff_cache/
+# Add these to .gitignore before you push
+
+
+# Never push these — local dev artifacts
+venv/
+.venv/
+.vs/
+
+
+.vs/
+venv/
+.venv/
+repointel-full-codebase.md
+repomix-output.xml
+
+repomix-output.xml
+repointel-full-codebase.md
+*.repomix*

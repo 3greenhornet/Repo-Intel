@@ -1,0 +1,155 @@
+﻿{"ts": "2026-10-27T05:23:28.951605+00:00", "level": "INFO", "logger": "app.db.sqlite_store", "event": "SQLite store ready at C:\\Users\\sreen\\OneDrive\\Pictures\\Bharath Gitam\\ai !411\\repo intel ai\\repointel-ai-2\\data\\repointel.db (WAL, thread-local connections)", "request_id": "-"}
+{"ts": "2026-10-27T05:23:29.070447+00:00", "level": "INFO", "logger": "app.core.ingestion.file_walker", "event": "Walked 11 files in C:\\Users\\sreen\\OneDrive\\Pictures\\Bharath Gitam\\ai !411\\repo intel ai\\repointel-ai-2\\data\\repos\\demo-web-shop", "request_id": "-"}
+{"ts": "2026-10-27T05:23:29.654243+00:00", "level": "INFO", "logger": "app.core.ingestion.issue_fetcher", "event": "Loaded 4 local fixture issues, 2 PRs", "request_id": "-"}
+{"ts": "2026-10-27T05:23:29.655644+00:00", "level": "INFO", "logger": "app.core.ingestion.ingestion_service", "event": "ingestion_complete", "request_id": "-", "repo_id": "fa6c1d90-547d-5875-be6e-7cf014f76d45", "files": 11, "commits": 7, "issues": 4, "pull_requests": 2, "docs": 2, "commit_hash": "8235c188513c4262c249f5efb7854f0c2eb29302", "by_category": {"config": 1, "code": 7, "docs": 2, "tests": 1}, "branches": 1, "tags": 0}
+{"ts": "2026-10-27T05:23:29.691176+00:00", "level": "INFO", "logger": "app.core.parsing.ast_extractor", "event": "ast_extraction_complete", "request_id": "-", "parsed": 5, "skipped": 2, "tree_sitter": true}
+{"ts": "2026-10-27T05:23:29.730438+00:00", "level": "INFO", "logger": "app.core.parsing.symbol_extractor", "event": "code_intelligence_built", "request_id": "-", "symbols": 27, "references": 58, "edges": 38}
+{"ts": "2026-10-27T05:23:29.748480+00:00", "level": "INFO", "logger": "app.core.analysis.builtin_analyzer", "event": "builtin_analysis_complete", "request_id": "-", "files_analyzed": 7, "findings": 12, "by_severity": {"critical": 2, "major": 3, "minor": 7}, "by_type": {"vulnerability": 3, "bug": 2, "td_prediction": 4, "code_smell": 3}}
+{"ts": "2026-10-27T05:23:29.748836+00:00", "level": "INFO", "logger": "app.core.analysis.sonarqube_runner", "event": "SonarQube disabled (ENABLE_SONAR=0) \u2014 skipping", "request_id": "-"}
+{"ts": "2026-10-27T05:23:29.749093+00:00", "level": "INFO", "logger": "app.core.analysis.codeql_runner", "event": "CodeQL disabled (ENABLE_CODEQL=0) \u2014 built-in analyzer provides coverage", "request_id": "-"}
+{"ts": "2026-10-27T05:23:29.749617+00:00", "level": "INFO", "logger": "app.core.analysis.quality_predictor", "event": "Model defect_predictor not found at C:\\Users\\sreen\\OneDrive\\Pictures\\Bharath Gitam\\ai !411\\repo intel ai\\repointel-ai-2\\backend\\models\\trained\\defect_predictor_v1.0.pkl \u2014 run scripts/train_quality_models.py", "request_id": "-"}
+{"ts": "2026-10-27T05:23:29.754505+00:00", "level": "INFO", "logger": "app.core.analysis.quality_predictor", "event": "quality_prediction_complete", "request_id": "-", "files_predicted": 7, "high_risk": 0}
+{"ts": "2026-10-27T05:23:29.762092+00:00", "level": "INFO", "logger": "app.core.analysis.history_intelligence", "event": "history_analysis_complete", "request_id": "-", "hotspot_count": 0, "hotspots": [], "top_authors": [["Ada Lovelace", 3], ["Grace Hopper", 3], ["Linus T", 1]], "coupled_pairs": 8, "top_couplings": [{"files": ["tests/__init__.py", "tests/test_api.py"], "count": 1}, {"files": ["demo_shop/api.py", "demo_shop/cart.py"], "count": 1}, {"files": ["README.md", "demo_shop/__init__.py"], "count": 1}, {"files": ["README.md", "demo_shop/models.py"], "count": 1}, {"files": ["README.md", "demo_shop/utils.py"], "count": 1}]}
+{"ts": "2026-10-27T05:23:29.764637+00:00", "level": "INFO", "logger": "app.core.knowledge.graph_builder", "event": "graph_built", "request_id": "-", "nodes": 63, "edges": 72, "node_labels": {"Repository": 1, "File": 11, "Function": 23, "Class": 3, "Commit": 7, "Issue": 4, "PullRequest": 2, "Finding": 12}, "edge_types": {"HAS_FILE": 11, "CONTAINS": 26, "CALLS": 11, "HAS_FINDING": 12, "MODIFIES": 12}}
+{"ts": "2026-10-27T05:23:29.778897+00:00", "level": "WARNING", "logger": "app.core.knowledge.embedding_engine", "event": "Cannot load 'sentence-transformers/all-MiniLM-L6-v2' (No module named 'sentence_transformers') \u2014 using hashed TF fallback", "request_id": "-"}
+{"ts": "2026-10-27T05:23:29.782300+00:00", "level": "WARNING", "logger": "app.core.knowledge.embedding_engine", "event": "Cannot load 'sentence-transformers/all-MiniLM-L6-v2' (No module named 'sentence_transformers') \u2014 using hashed TF fallback", "request_id": "-"}
+{"ts": "2026-10-27T05:23:29.795442+00:00", "level": "INFO", "logger": "app.core.knowledge.vector_indexer", "event": "vector_index_built", "request_id": "-", "repo_id": "fa6c1d90-547d-5875-be6e-7cf014f76d45", "chunks": 45, "backend": "numpy", "dimension": 384, "code_chunks": 22, "doc_chunks": 23}
+{"ts": "2026-10-27T05:23:29.800005+00:00", "level": "INFO", "logger": "app.db.sqlite_store", "event": "Stored 12 findings for fa6c1d90-547d-5875-be6e-7cf014f76d45", "request_id": "-"}
+{"ts": "2026-10-27T05:23:29.817749+00:00", "level": "INFO", "logger": "app.core.knowledge.knowledge_service", "event": "phase1_complete", "request_id": "-", "repo_id": "fa6c1d90-547d-5875-be6e-7cf014f76d45", "total_seconds": 0.87, "chunks": 45, "findings": 12}
+{
+  "repo_url": "data/repos/demo-web-shop",
+  "branch": "main",
+  "phases": {
+    "ingestion": {
+      "repo_id": "fa6c1d90-547d-5875-be6e-7cf014f76d45",
+      "files": 11,
+      "commits": 7,
+      "issues": 4,
+      "pull_requests": 2,
+      "docs": 2,
+      "commit_hash": "8235c188513c4262c249f5efb7854f0c2eb29302",
+      "by_category": {
+        "config": 1,
+        "code": 7,
+        "docs": 2,
+        "tests": 1
+      },
+      "seconds": 0.7
+    },
+    "parsing": {
+      "symbols": 27,
+      "references": 58,
+      "edges": 38,
+      "symbols_by_type": {
+        "function": 24,
+        "class": 3
+      },
+      "edges_by_type": {
+        "calls": 11,
+        "contains": 27
+      },
+      "seconds": 0.06
+    },
+    "analysis": {
+      "findings": 12,
+      "tools": [
+        "repointel"
+      ],
+      "seconds": 0.02
+    },
+    "quality_prediction": {
+      "files": 7,
+      "seconds": 0.01
+    },
+    "history": {
+      "hotspot_count": 0,
+      "hotspots": [],
+      "top_authors": [
+        [
+          "Ada Lovelace",
+          3
+        ],
+        [
+          "Grace Hopper",
+          3
+        ],
+        [
+          "Linus T",
+          1
+        ]
+      ],
+      "coupled_pairs": 8,
+      "top_couplings": [
+        {
+          "files": [
+            "tests/__init__.py",
+            "tests/test_api.py"
+          ],
+          "count": 1
+        },
+        {
+          "files": [
+            "demo_shop/api.py",
+            "demo_shop/cart.py"
+          ],
+          "count": 1
+        },
+        {
+          "files": [
+            "README.md",
+            "demo_shop/__init__.py"
+          ],
+          "count": 1
+        },
+        {
+          "files": [
+            "README.md",
+            "demo_shop/models.py"
+          ],
+          "count": 1
+        },
+        {
+          "files": [
+            "README.md",
+            "demo_shop/utils.py"
+          ],
+          "count": 1
+        }
+      ],
+      "seconds": 0.01
+    },
+    "knowledge_base": {
+      "graph": {
+        "nodes": 63,
+        "edges": 72,
+        "node_labels": {
+          "Repository": 1,
+          "File": 11,
+          "Function": 23,
+          "Class": 3,
+          "Commit": 7,
+          "Issue": 4,
+          "PullRequest": 2,
+          "Finding": 12
+        },
+        "edge_types": {
+          "HAS_FILE": 11,
+          "CONTAINS": 26,
+          "CALLS": 11,
+          "HAS_FINDING": 12,
+          "MODIFIES": 12
+        }
+      },
+      "vector": {
+        "chunks": 45,
+        "backend": "numpy"
+      },
+      "persisted": "sqlite",
+      "seconds": 0.05
+    }
+  },
+  "repo_id": "fa6c1d90-547d-5875-be6e-7cf014f76d45",
+  "commit_hash": "8235c188513c4262c249f5efb7854f0c2eb29302",
+  "total_seconds": 0.87,
+  "status": "ready"
+}

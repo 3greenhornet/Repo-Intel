@@ -1,0 +1,154 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * *'  # FIX-018: nightly for e2e
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    - name: Install dependencies
+      run: pip install -r backend/requirements.txt
+    - name: Train quality models (FIX-023: no .pkl committed)
+      run: python scripts/train_quality_models.py
+    - name: Run unit tests with coverage gate (FIX-019)
+      run: |
+        pytest backend/tests/unit/ \
+          --cov=backend/app \
+          --cov-report=term-missing \
+          --cov-report=xml \
+          --cov-fail-under=70
+    - name: Run integration tests
+      run: pytest backend/tests/integration/ -v -m integration
+    - name: Upload coverage
+      uses: codecov/codecov-action@v4
+      if: always()
+      with:
+        files: coverage.xml
+        fail_ci_if_error: false
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    # FIX-022/2026 hardening: pin linter version so a compromised or
+    # breaking tool release cannot silently alter CI behavior.
+    - name: Install pinned lint tools
+      run: pip install ruff==0.8.4 black==24.10.0
+    - name: Ruff lint (FIX-043: real-bug + bare-except gate)
+      run: ruff check backend/app/ scripts/ --select F,E722
+    - name: Ruff style report (non-blocking — E501 cleanup is tracked debt)
+      run: ruff check backend/app/ scripts/ --select E,W,B,S --statistics --exit-zero
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    - name: Install pinned pip-audit (FIX-022 + supply-chain hardening)
+      run: pip install pip-audit==2.7.3
+    - name: Audit locked dependencies
+      run: pip-audit -r backend/requirements.txt --strict --disable-pip
+
+  container-scan:
+    # 2026 correction: Trivy scan of the built image (HIGH/CRITICAL gate).
+    # Only meaningful on main merges — image build needs the full context.
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name != 'schedule'
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build image
+      run: docker build -t repointel-backend:ci backend/
+    - name: Trivy container scan (pinned version)
+      uses: aquasecurity/trivy-action@0.28.0
+      with:
+        image-ref: repointel-backend:ci
+        severity: HIGH,CRITICAL
+        exit-code: '1'
+        ignore-unfixed: true
+
+  e2e:
+    # FIX-018: the pipeline-level test runs on main + nightly, not PRs.
+    needs: [test]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'schedule'
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    - name: Install dependencies
+      run: pip install -r backend/requirements.txt
+    - name: Create demo repository
+      run: python scripts/create_demo_repo.py data/repos/demo-web-shop
+    - name: Build knowledge base
+      run: python scripts/build_knowledge.py data/repos/demo-web-shop --no-github
+    - name: Run e2e tests
+      env:
+        LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'zai' }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      run: pytest backend/tests/e2e/ -v -m e2e
+
+  deploy:
+    # FIX-017: deploy only runs when registry secrets are configured;
+    # otherwise it skips with a clear message instead of failing on the
+    # literal '<YOUR_REGISTRY>' placeholder.
+    needs: [test, lint, security]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    env:
+      REGISTRY: ${{ secrets.CONTAINER_REGISTRY }}
+      IMAGE_NAME: ${{ secrets.CONTAINER_IMAGE_NAME }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Skip if registry not configured
+      id: check
+      run: |
+        if [ -z "$REGISTRY" ] || [ -z "$IMAGE_NAME" ]; then
+          echo "Container registry not configured. Set CONTAINER_REGISTRY and CONTAINER_IMAGE_NAME secrets."
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+        fi
+    - uses: docker/setup-buildx-action@v3
+      if: steps.check.outputs.skip == 'false'
+    - uses: docker/login-action@v3
+      if: steps.check.outputs.skip == 'false'
+      with:
+        registry: ${{ secrets.CONTAINER_REGISTRY }}
+        username: ${{ secrets.CONTAINER_REGISTRY_USER }}
+        password: ${{ secrets.CONTAINER_REGISTRY_PASSWORD }}
+    - name: Build and push
+      if: steps.check.outputs.skip == 'false'
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    - name: Deploy to Kubernetes
+      if: steps.check.outputs.skip == 'false'
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+        kubectl set image deployment/repointel-backend \
+          backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        kubectl rollout status deployment/repointel-backend --timeout=180s

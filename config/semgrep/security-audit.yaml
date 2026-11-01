@@ -1,0 +1,82 @@
+rules:
+  # ============================================================
+  # RepoIntel AI — 2026 Local Security Dataflow & Audit Rules
+  # Offline ruleset cached for air-gapped demo runs
+  # ============================================================
+
+  - id: security-sql-injection-taint
+    languages: [python]
+    severity: ERROR
+    message: "Untrusted input concatenated into SQL query string without parameterization."
+    pattern-either:
+      - pattern: cursor.execute("..." % ...)
+      - pattern: cursor.execute(f"...")
+      - pattern: cursor.execute("..." + ...)
+      - pattern: db.execute("..." % ...)
+      - pattern: db.execute(f"...")
+      - pattern: db.execute("..." + ...)
+    metadata:
+      cwe: "CWE-89: SQL Injection"
+      owasp: "A03:2021 - Injection"
+      category: security
+      confidence: HIGH
+
+  - id: security-command-injection
+    languages: [python]
+    severity: ERROR
+    message: "Command execution with untrusted input or shell=True allows arbitrary code execution."
+    pattern-either:
+      - pattern: subprocess.Popen(..., shell=True, ...)
+      - pattern: subprocess.call(..., shell=True, ...)
+      - pattern: subprocess.run(..., shell=True, ...)
+      - pattern: os.system(...)
+      - pattern: os.popen(...)
+    metadata:
+      cwe: "CWE-78: OS Command Injection"
+      owasp: "A03:2021 - Injection"
+      category: security
+
+  - id: security-hardcoded-secret
+    languages: [python]
+    severity: ERROR
+    message: "Hardcoded cryptographic secret, private key, or API token detected."
+    pattern-regex: '(?i)(api_key|apikey|secret_key|private_key|token|auth_token)\s*=\s*["''][A-Za-z0-9_\-\.]{16,}["'']'
+    metadata:
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+      owasp: "A07:2021 - Identification and Authentication Failures"
+      category: security
+
+  - id: security-unsafe-yaml-deserialize
+    languages: [python]
+    severity: WARNING
+    message: "yaml.load without Loader=yaml.SafeLoader can lead to arbitrary object deserialization."
+    pattern: yaml.load(...)
+    metadata:
+      cwe: "CWE-502: Deserialization of Untrusted Data"
+      category: security
+
+  - id: security-insecure-hash
+    languages: [python]
+    severity: WARNING
+    message: "Use of broken cryptographic hash algorithm (MD5/SHA1). Prefer SHA-256 or bcrypt."
+    pattern-either:
+      - pattern: hashlib.md5(...)
+      - pattern: hashlib.sha1(...)
+    metadata:
+      cwe: "CWE-328: Use of Weak Hash"
+      category: security
+
+  - id: security-ssrf-untrusted-request
+    languages: [python]
+    severity: WARNING
+    message: "Potential Server-Side Request Forgery (SSRF): HTTP request to dynamic destination."
+    pattern-either:
+      - pattern: requests.get($URL, ...)
+      - pattern: requests.post($URL, ...)
+      - pattern: httpx.get($URL, ...)
+      - pattern: httpx.post($URL, ...)
+    metadata:
+      cwe: "CWE-918: Server-Side Request Forgery"
+      owasp: "A10:2021 - Server-Side Request Forgery (SSRF)"
+      category: security
+

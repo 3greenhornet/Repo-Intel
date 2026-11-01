@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RepoIntel AI — Tactical Intelligence Console</title>
+  
+  <!-- Dot-Matrix & Terminal Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+  <!-- Interactive Network Graph & Syntax Highlighting -->
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+  <style>
+    /* ==========================================================================
+       TACTICAL DOT-MATRIX / NOTHING OS INDUSTRIAL DESIGN SYSTEM
+       ========================================================================== */
+    :root {
+      --bg: #08090C;
+      --card: #111318;
+      --card-inner: #0A0B0E;
+      --border: #1B1E26;
+      --border-focus: #2E3444;
+      
+      --text: #FFFFFF;
+      --muted: #8A909E;
+      --dim: #4B505E;
+      
+      --orange: #FF3B00;
+      --orange-dim: rgba(255, 59, 0, 0.15);
+      --cyan: #00F2FE;
+      --green: #00FF66;
+      --yellow: #FFCC00;
+
+      --font-ndot: 'Silkscreen', monospace;
+      --font-terminal: 'VT323', monospace;
+      --font-mono: 'Space Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* HARD CORE SCROLLBARS */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 0px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+    ::selection { background: var(--orange); color: #000; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      min-height: 100vh;
+      padding: 16px;
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    /* OVERLAYS: CRT SCANLINES + NOISE + HALFTONE GRID */
+    .crt-scanlines {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      pointer-events: none; z-index: 9998;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,0.12), rgba(0,0,0,0.12) 1px, transparent 1px, transparent 2px);
+    }
+    .noise-overlay {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      pointer-events: none; z-index: 9999; opacity: 0.035;
+    }
+    .halftone {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      pointer-events: none; z-index: 1;
+      background-image: radial-gradient(var(--border) 1px, transparent 1px);
+      background-size: 16px 16px; opacity: 0.5;
+    }
+
+    .container {
+      position: relative; z-index: 10; max-width: 1440px; margin: 0 auto;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* 1. HEADER */
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 18px; background: var(--card); border: 1px solid var(--border);
+    }
+    .brand-cluster { display: flex; align-items: center; gap: 12px; }
+    .brand { font-family: var(--font-ndot); font-size: 15px; color: var(--text); text-transform: uppercase; letter-spacing: 1px; }
+    .brand span { color: var(--orange); }
+    .brand-sub { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; border-left: 1px solid var(--border); padding-left: 12px; }
+    
+    .status-cluster { display: flex; align-items: center; gap: 12px; }
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--font-ndot); font-size: 10px; color: var(--muted);
+      background: var(--card-inner); padding: 6px 12px; border: 1px solid var(--border);
+    }
+    .status-dot { width: 6px; height: 6px; background: var(--orange); box-shadow: 0 0 0 1px #000, 0 0 0 2px var(--orange); }
+    .status-dot.good { background: var(--green); box-shadow: 0 0 0 1px #000, 0 0 0 2px var(--green); animation: pulse-dot 2s infinite; }
+    @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    /* 2. CONSOLIDATED COMMAND BAR */
+    .command-bar {
+      display: flex; gap: 10px; background: var(--card); padding: 10px;
+      border: 1px solid var(--border); align-items: center; flex-wrap: wrap;
+    }
+    .command-bar select {
+      background: var(--card-inner); border: 1px solid var(--border); color: var(--text);
+      padding: 11px 16px; font-family: var(--font-mono); font-size: 12px; outline: none; cursor: pointer;
+      min-width: 220px;
+    }
+    .command-bar select:focus { border-color: var(--orange); }
+    
+    .input-wrapper {
+      position: relative; flex: 1; min-width: 280px; display: flex; align-items: center;
+      background: var(--card-inner); border: 1px solid var(--border);
+    }
+    .input-wrapper:focus-within { border-color: var(--orange); }
+    .input-prompt { position: absolute; left: 14px; color: var(--orange); font-family: var(--font-ndot); font-size: 11px; pointer-events: none; }
+    .input-wrapper input {
+      width: 100%; background: transparent; border: none; color: var(--text);
+      padding: 11px 16px 11px 32px; font-family: var(--font-mono); font-size: 12px; outline: none;
+    }
+    
+    .btn-exec {
+      background: var(--orange); color: #000; border: none; padding: 11px 24px;
+      font-family: var(--font-ndot); font-size: 11px; font-weight: 700; cursor: pointer;
+      text-transform: uppercase; box-shadow: 0 4px 0 #8a1e00; transition: all 0.1s;
+      white-space: nowrap;
+    }
+    .btn-exec:hover { background: #FF5522; }
+    .btn-exec:active { transform: translateY(4px); box-shadow: none; }
+    .btn-exec:disabled { opacity: 0.4; cursor: wait; transform: translateY(4px); box-shadow: none; }
+
+    /* QUICK QUERY CHIPS */
+    .quick-chips {
+      display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: -6px; padding: 0 2px;
+    }
+    .chip-label { font-family: var(--font-ndot); font-size: 9px; color: var(--dim); margin-right: 4px; }
+    .chip-btn {
+      background: var(--card-inner); border: 1px solid var(--border); color: var(--muted);
+      padding: 4px 10px; font-family: var(--font-mono); font-size: 10px; cursor: pointer;
+      border-radius: 0px; transition: all 0.1s;
+    }
+    .chip-btn:hover { border-color: var(--orange); color: var(--orange); background: var(--orange-dim); }
+
+    /* 3. BENTO METRICS GRID */
+    .bento-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .metric-card {
+      background: var(--card); border: 1px solid var(--border);
+      padding: 16px; display: flex; flex-direction: column; justify-content: space-between;
+      position: relative; overflow: hidden; min-height: 105px;
+    }
+    .metric-header {
+      font-family: var(--font-ndot); font-size: 9px; color: var(--muted);
+      display: flex; justify-content: space-between; letter-spacing: 1px;
+    }
+    .metric-value { font-family: var(--font-terminal); font-size: 38px; line-height: 1; margin: 8px 0; color: var(--text); }
+    
+    .sparkline-svg { width: 100%; height: 20px; stroke: var(--orange); stroke-width: 2; fill: none; stroke-dasharray: 2 2; }
+    .sparkline-svg.cyan { stroke: var(--cyan); }
+    .sparkline-svg.green { stroke: var(--green); }
+    .sparkline-svg.white { stroke: var(--text); }
+
+    /* 4. NAVIGATION */
+    nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); padding-bottom: 8px; flex-wrap: wrap; }
+    nav button {
+      background: transparent; border: 1px solid transparent; color: var(--muted);
+      padding: 8px 16px; font-family: var(--font-ndot); font-size: 10px; cursor: pointer; transition: all 0.1s;
+      letter-spacing: 0.5px;
+    }
+    nav button.active {
+      background: var(--card); border-color: var(--border); color: var(--orange);
+      border-left: 2px solid var(--orange);
+    }
+    nav button:hover:not(.active) { color: var(--text); border-color: var(--border-focus); }
+
+    /* 5. VIEWPORT PANELS */
+    .viewport-panel { background: var(--card); border: 1px solid var(--border); padding: 20px; min-height: 480px; }
+
+    /* TAB 1: CONSOLE & SPLIT VIEW */
+    .terminal-split { display: grid; grid-template-columns: 2.2fr 1fr; gap: 16px; }
+    .console-pane { display: flex; flex-direction: column; gap: 8px; }
+    .console-header {
+      font-family: var(--font-ndot); font-size: 9px; color: var(--muted);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .console-out {
+      background: var(--card-inner); border: 1px solid var(--border); border-left: 3px solid var(--orange);
+      padding: 18px; font-family: var(--font-mono); font-size: 13px; line-height: 1.6;
+      height: 480px; overflow-y: auto; white-space: pre-wrap;
+    }
+    
+    /* PIPELINE STEPPER */
+    .pipeline-stepper {
+      display: flex; gap: 8px; font-family: var(--font-ndot); font-size: 9px;
+      background: var(--card-inner); border: 1px solid var(--border); padding: 8px 12px; margin-bottom: 10px;
+    }
+    .pipe-step { color: var(--dim); }
+    .pipe-step.active { color: var(--orange); animation: pulse-dot 1.5s infinite; }
+    .pipe-step.done { color: var(--green); }
+
+    /* CITATIONS & GRAPH PANE */
+    .citations-pane {
+      background: var(--card-inner); border: 1px solid var(--border); padding: 16px;
+      display: flex; flex-direction: column; gap: 12px; height: 508px; overflow-y: auto;
+    }
+    .citations-header {
+      font-family: var(--font-ndot); font-size: 9px; color: var(--muted);
+      display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border); padding-bottom: 8px;
+    }
+    .citation-item {
+      background: var(--card); border: 1px solid var(--border); padding: 10px;
+      font-size: 11px; cursor: pointer; transition: all 0.1s;
+    }
+    .citation-item:hover { border-color: var(--cyan); background: rgba(0, 242, 254, 0.03); }
+    .citation-file { color: var(--cyan); font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+    .citation-snippet { color: var(--muted); font-size: 10px; margin-top: 6px; font-family: var(--font-mono); line-height: 1.4; }
+
+    /* CONTRADICTION BANNER */
+    .contradiction-box {
+      border: 1px solid var(--orange); background: var(--orange-dim); padding: 12px;
+      font-size: 11px; color: #fff; margin-bottom: 12px;
+    }
+    .contradiction-title { font-family: var(--font-ndot); color: var(--orange); font-size: 10px; margin-bottom: 4px; }
+
+    /* KNOWLEDGE GRAPH TRACE */
+    .graph-trace {
+      margin-top: auto; border: 1px dashed var(--border); padding: 14px;
+      font-family: var(--font-mono); font-size: 10px; color: var(--muted);
+      background: rgba(0, 0, 0, 0.4);
+    }
+    .graph-trace-title { font-family: var(--font-ndot); font-size: 9px; color: var(--cyan); margin-bottom: 8px; }
+    .tree-node { padding: 2px 0; color: var(--text); }
+    .tree-branch { color: var(--dim); margin-right: 4px; }
+    #graph-trace-content {
+      width: 100%;
+      height: 250px; /* MUST HAVE EXPLICIT HEIGHT for vis-network (§Etch Detail 6) */
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      margin-top: 8px;
+    }
+
+    /* CODE BLOCKS INSIDE CONSOLE */
+    .code-block-wrapper {
+      margin: 10px 0; border: 1px solid var(--border); background: #000; border-radius: 0px;
+    }
+    .code-header {
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--card-inner); padding: 4px 10px; font-family: var(--font-ndot); font-size: 9px; color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .code-block-wrapper pre { padding: 12px; overflow-x: auto; font-family: var(--font-mono); font-size: 12px; color: #A8B2C1; }
+    .inline-code { background: var(--card-inner); border: 1px solid var(--border); padding: 1px 5px; font-family: var(--font-mono); color: var(--cyan); }
+
+    /* TABLES & BADGES */
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-family: var(--font-ndot); font-size: 9px; color: var(--muted); padding: 12px; border-bottom: 1px solid var(--border); }
+    td { padding: 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    
+    .tag-pill {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px;
+      font-family: var(--font-ndot); font-size: 9px;
+      border: 1px solid var(--border); background: var(--card-inner); text-transform: uppercase;
+    }
+    .tag-pill.critical, .tag-pill.blocker { color: var(--orange); border-color: rgba(255,59,0,0.4); }
+    .tag-pill.major { color: var(--yellow); border-color: rgba(255,204,0,0.4); }
+    .tag-pill.minor, .tag-pill.info { color: var(--cyan); border-color: rgba(0,242,254,0.4); }
+    .tag-pill::before { content: '■'; font-size: 6px; }
+
+    .copy-btn, .action-btn {
+      background: transparent; border: 1px solid var(--border); color: var(--muted);
+      padding: 4px 8px; font-family: var(--font-ndot); font-size: 9px; cursor: pointer; transition: all 0.1s;
+    }
+    .copy-btn:hover, .action-btn:hover { border-color: var(--text); color: var(--text); }
+    .copy-btn.copied { background: var(--green); color: #000; border-color: var(--green); }
+    .action-btn.investigate { border-color: var(--orange); color: var(--orange); }
+    .action-btn.investigate:hover { background: var(--orange); color: #000; }
+
+    /* ASCII BARS & KV ROWS */
+    .ascii-bar { font-family: var(--font-terminal); font-size: 18px; color: var(--cyan); letter-spacing: 2px; }
+    .kv-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--border); }
+    .kv-row:last-child { border-bottom: none; }
+    .kv-key { color: var(--muted); font-size: 11px; }
+    .kv-val { font-family: var(--font-terminal); font-size: 20px; color: var(--cyan); }
+
+    /* BLAST RADIUS TREE */
+    .impact-tree {
+      margin-top: 12px; background: var(--card-inner); border: 1px solid var(--border);
+      padding: 14px; font-family: var(--font-mono); font-size: 11px;
+    }
+    .impact-tree-node { display: flex; gap: 8px; padding: 3px 0; }
+    .node-id { color: var(--cyan); }
+    .node-rel { color: var(--dim); }
+
+    @media (max-width: 900px) {
+      .bento-grid { grid-template-columns: repeat(2, 1fr); }
+      .terminal-split { grid-template-columns: 1fr; }
+      .command-bar { flex-direction: column; align-items: stretch; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="crt-scanlines"></div>
+  <svg class="noise-overlay" xmlns="http://www.w3.org/2000/svg"><filter id="noiseFilter"><feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(#noiseFilter)"/></svg>
+  <div class="halftone"></div>
+
+  <div class="container">
+    
+    <!-- 1. HEADER -->
+    <header>
+      <div class="brand-cluster">
+        <div class="brand">REPOINTEL <span>// TACTICAL OS</span></div>
+        <div class="brand-sub">EVIDENCE-GROUNDED REPOSITORY INTELLIGENCE</div>
+      </div>
+      <div class="status-cluster">
+        <div class="status-badge">
+          <div class="status-dot" id="health-dot"></div>
+          <span id="health-text">INITIALIZING...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 2. CONSOLIDATED COMMAND BAR -->
+    <div class="command-bar">
+      <select id="qa-repo" onchange="onRepoChanged()"></select>
+      <div class="input-wrapper">
+        <span class="input-prompt">&gt;</span>
+        <input id="qa-input" placeholder="Query repository evidence... e.g. 'Who calls validate_credentials?'">
+      </div>
+      <button class="btn-exec" id="qa-ask">EXECUTE [ENTER]</button>
+      <button class="btn-exec" id="qa-investigate" style="background:var(--cyan); box-shadow:0 4px 0 #008fa0; color:#000;">INVESTIGATE [REACT]</button>
+    </div>
+
+    <!-- QUICK QUERY CHIPS -->
+    <div class="quick-chips">
+      <span class="chip-label">QUICK INTEL:</span>
+      <button class="chip-btn" onclick="runQuickQuery('Explain the authentication and authorization security flow')">01 AUTH FLOW</button>
+      <button class="chip-btn" onclick="runQuickQuery('List top security vulnerabilities and calculate blast radius')">02 VULNERABILITY AUDIT</button>
+      <button class="chip-btn" onclick="runQuickQuery('Describe the core data ingestion and reasoning pipeline architecture')">03 PIPELINE TRACE</button>
+      <button class="chip-btn" onclick="runQuickQuery('Which modules have the highest coupling and blast radius?')">04 HIGH IMPACT HUBS</button>
+    </div>
+
+    <!-- 3. BENTO METRICS GRID -->
+    <div class="bento-grid">
+      <div class="metric-card">
+        <div class="metric-header">01 INDEXED FILES <span style="color:var(--orange)">[AST]</span></div>
+        <div class="metric-value" id="kpi-files">—</div>
+        <svg class="sparkline-svg" viewBox="0 0 100 20"><path d="M0 16 L20 12 L40 14 L60 6 L80 10 L100 4" /></svg>
+      </div>
+      <div class="metric-card">
+        <div class="metric-header">02 SYMBOLS <span style="color:var(--cyan)">[GRAPH]</span></div>
+        <div class="metric-value" id="kpi-symbols">—</div>
+        <svg class="sparkline-svg cyan" viewBox="0 0 100 20"><path d="M0 18 L25 14 L50 8 L75 12 L100 3" /></svg>
+      </div>
+      <div class="metric-card">
+        <div class="metric-header">03 FINDINGS <span style="color:var(--text)">[TOTAL]</span></div>
+        <div class="metric-value" id="kpi-findings">—</div>
+        <svg class="sparkline-svg white" viewBox="0 0 100 20"><path d="M0 8 L20 10 L40 4 L60 14 L80 11 L100 16" /></svg>
+      </div>
+      <div class="metric-card" style="border-color: rgba(255,59,0,0.3);">
+        <div class="metric-header" style="color:var(--orange);">04 CRITICAL ALERTS <span style="color:var(--orange)">[BLOCKERS]</span></div>
+        <div class="metric-value" id="kpi-critical" style="color: var(--orange)">—</div>
+        <svg class="sparkline-svg" viewBox="0 0 100 20" style="stroke-width:2.5;"><path d="M0 19 L30 15 L60 17 L80 4 L100 6" /></svg>
+      </div>
+    </div>
+
+    <!-- 4. NAVIGATION -->
+    <nav>
+      <button data-tab="qa" class="active">01 // CONSOLE</button>
+      <button data-tab="findings">02 // FINDINGS</button>
+      <button data-tab="recs">03 // RECOMMENDATIONS</button>
+      <button data-tab="arch">04 // ARCHITECTURE &amp; IMPACT</button>
+      <button data-tab="repos">05 // REPOSITORIES</button>
+    </nav>
+
+    <!-- 5. VIEWPORT PANELS -->
+    <div class="viewport-panel">
+      
+      <!-- TAB 1: CONSOLE -->
+      <div id="tab-qa">
+        <div class="pipeline-stepper" id="pipeline-stepper">
+          <span class="pipe-step" id="step-idle">[00 STANDBY]</span>
+          <span class="pipe-step" id="step-retrieval">[01 RETRIEVAL: 0 CHUNKS]</span>
+          <span class="pipe-step" id="step-nli">[02 NLI VERIFICATION]</span>
+          <span class="pipe-step" id="step-reasoning">[03 AGENT SYNTHESIS]</span>
+        </div>
+
+        <div id="contradiction-banner" style="display:none;" class="contradiction-box"></div>
+
+        <div class="terminal-split">
+          <div class="console-pane">
+            <div class="console-header">
+              <span>LIVE EVIDENCE REASONING STREAM</span>
+              <button class="copy-btn" id="copy-answer-btn" onclick="copyConsoleOutput()">COPY OUTPUT</button>
+            </div>
+            <div class="console-out" id="stream-text"><span style="color:var(--orange)">[SYS]</span> Console ready. Select a repository and submit a query above.</div>
+          </div>
+          
+          <div class="citations-pane">
+            <div class="citations-header">
+              <span>EVIDENCE CITATIONS</span>
+              <span id="citation-count" style="color:var(--cyan);">0 CITATIONS</span>
+            </div>
+            <div id="citations-list" style="color: var(--muted); font-size: 11px;">No active query citations. Submit a query to inspect ground-truth evidence.</div>
+            
+            <div class="graph-trace" id="graph-trace-box">
+              <div class="graph-trace-title">[ KNOWLEDGE GRAPH REASONING TRACE ]</div>
+              <div id="graph-trace-content">
+                <div class="tree-node"><span class="tree-branch">└──</span> Awaiting query execution...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: FINDINGS -->
+      <div id="tab-findings" style="display:none">
+        <div style="display:flex; gap:10px; margin-bottom:16px; align-items:center; flex-wrap:wrap;">
+          <input id="f-search" oninput="filterFindings()" placeholder="Filter by rule, file or message..." style="background:var(--card-inner); border:1px solid var(--border); color:var(--text); padding:9px 12px; font-family:var(--font-mono); font-size:12px; min-width:240px; outline:none;">
+          <select id="f-sev" onchange="loadFindings()" style="background:var(--card-inner); border:1px solid var(--border); color:var(--text); padding:9px 12px; font-family:var(--font-mono); outline:none; cursor:pointer;">
+            <option value="">ALL SEVERITIES</option>
+            <option>blocker</option>
+            <option>critical</option>
+            <option>major</option>
+            <option>minor</option>
+          </select>
+          <select id="f-type" onchange="loadFindings()" style="background:var(--card-inner); border:1px solid var(--border); color:var(--text); padding:9px 12px; font-family:var(--font-mono); outline:none; cursor:pointer;">
+            <option value="">ALL TYPES</option>
+            <option value="vulnerability">vulnerability</option>
+            <option value="bug">bug</option>
+            <option value="code_smell">code smell</option>
+          </select>
+          <div style="flex:1;"></div>
+          <button class="btn-exec" style="background:transparent; border:1px solid var(--border); color:var(--text); box-shadow:none; padding:9px 16px;" onclick="exportFindingsReport()">EXPORT JSON REPORT</button>
+        </div>
+        <div id="findings-table"></div>
+      </div>
+
+      <!-- TAB 3: RECOMMENDATIONS -->
+      <div id="tab-recs" style="display:none">
+        <div id="recs-list" style="display:flex; flex-direction:column; gap:12px;"></div>
+      </div>
+
+      <!-- TAB 4: ARCHITECTURE & IMPACT -->
+      <div id="tab-arch" style="display:none">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+          <div style="border:1px solid var(--border); background:var(--card-inner); padding:20px;">
+            <div style="font-family:var(--font-ndot); font-size:10px; color:var(--muted); margin-bottom:16px;">01 // STRUCTURE METRICS</div>
+            <div class="kv-row"><span class="kv-key">CODE FILES</span><span class="kv-val" id="arch-files">—</span></div>
+            <div class="kv-row"><span class="kv-key">FUNCTIONS</span><span class="kv-val" id="arch-funcs">—</span></div>
+            <div class="kv-row"><span class="kv-key">CLASSES</span><span class="kv-val" id="arch-classes">—</span></div>
+            <div class="kv-row"><span class="kv-key">CALL EDGES</span><span class="kv-val" id="arch-edges">—</span></div>
+          </div>
+          
+          <div style="border:1px solid var(--border); background:var(--card-inner); padding:20px;">
+            <div style="font-family:var(--font-ndot); font-size:10px; color:var(--muted); margin-bottom:16px;">02 // TOP HUB SYMBOLS (CLICK TO ANALYZE BLAST RADIUS)</div>
+            <div id="arch-hubs"></div>
+          </div>
+        </div>
+
+        <!-- INTERACTIVE BLAST RADIUS ANALYZER -->
+        <div style="border:1px solid var(--border); background:var(--card-inner); padding:20px;">
+          <div style="font-family:var(--font-ndot); font-size:10px; color:var(--orange); margin-bottom:12px;">03 // SYMBOL IMPACT &amp; BLAST RADIUS ANALYZER</div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <input id="impact-input" placeholder="Enter symbol name... e.g. 'verify_token' or click any hub symbol above" style="flex:1; background:#000; border:1px solid var(--border); color:var(--text); padding:10px 14px; font-family:var(--font-mono); font-size:12px; outline:none;">
+            <button class="btn-exec" onclick="runManualImpactAnalysis()">ANALYZE BLAST RADIUS</button>
+          </div>
+          <div id="impact-graph-canvas" style="margin-top:14px; height:240px; border:1px solid var(--border); background:#000; display:none;"></div>
+          <div id="impact-result" style="margin-top:16px;"></div>
+        </div>
+      </div>
+
+      <!-- TAB 5: REPOSITORIES -->
+      <div id="tab-repos" style="display:none">
+        <div style="display:flex; gap:10px; margin-bottom:16px;">
+          <div class="input-wrapper">
+             <span class="input-prompt">&gt;</span>
+             <input id="ingest-url" placeholder="Enter target repository path or GitHub clone URL...">
+          </div>
+          <button class="btn-exec" id="ingest-btn">INGEST REPO</button>
+        </div>
+        <div id="ingest-status" style="margin-bottom:14px; font-family:var(--font-mono); font-size:12px;"></div>
+        <div id="repos-list"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    function parseApiError(err, statusText) {
+      if (!err) return statusText || 'Unknown error';
+      if (typeof err.detail === 'string') return err.detail;
+      if (Array.isArray(err.detail)) {
+        return err.detail.map(d => (d.loc ? d.loc.join('.') + ': ' : '') + (d.msg || JSON.stringify(d))).join('; ');
+      }
+      if (err.message) return err.message;
+      return JSON.stringify(err);
+    }
+
+    const api = {
+      async get(path) {
+        const r = await fetch(path);
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({ detail: r.statusText }));
+          throw new Error(parseApiError(err, r.statusText));
+        }
+        return r.json();
+      },
+      async post(path, body) {
+        const r = await fetch(path, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(body)
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({ detail: r.statusText }));
+          throw new Error(parseApiError(err, r.statusText));
+        }
+        return r.json();
+      },
+    };
+
+    let repos = [];
+    let currentFindings = [];
+    let rawAnswerText = '';
+
+    // ASCII Bar Generator
+    function renderAsciiBar(val, max, width = 8) {
+      if (!max || max <= 0) return '[' + '□'.repeat(width) + ']';
+      const filled = Math.min(width, Math.max(0, Math.round((val / max) * width)));
+      return '[' + '■'.repeat(filled) + '□'.repeat(width - filled) + ']';
+    }
+
+    // Safe HTML Escaper
+    function escapeHtml(s) {
+      if (!s) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // Markdown Parser
+    function formatMarkdown(text) {
+      if (!text) return '';
+      let escaped = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      // Code blocks ```lang ... ```
+      escaped = escaped.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+        return `<div class="code-block-wrapper">
+          <div class="code-header">
+            <span>${(lang || 'CODE').toUpperCase()}</span>
+            <button class="copy-btn" onclick="copySnippet(this)">COPY</button>
+          </div>
+          <pre><code>${code.trim()}</code></pre>
+        </div>`;
+      });
+
+      // Inline code `code`
+      escaped = escaped.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+
+      // Bold **text**
+      escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:var(--text);">$1</strong>');
+
+      // Bullet points
+      escaped = escaped.replace(/^\s*[-*]\s+(.*)$/gm, '• $1');
+
+      // Line breaks
+      escaped = escaped.replace(/\n/g, '<br>');
+      return escaped;
+    }
+
+    function copySnippet(btn) {
+      const code = btn.closest('.code-block-wrapper').querySelector('code').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'COPIED';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
+      });
+    }
+
+    function copyText(text, btnEl) {
+      navigator.clipboard.writeText(text).then(() => {
+        const original = btnEl.textContent;
+        btnEl.textContent = 'COPIED';
+        btnEl.classList.add('copied');
+        setTimeout(() => { btnEl.textContent = original; btnEl.classList.remove('copied'); }, 1500);
+      });
+    }
+
+    function copyConsoleOutput() {
+      const btn = $('#copy-answer-btn');
+      navigator.clipboard.writeText(rawAnswerText).then(() => {
+        btn.textContent = 'COPIED';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'COPY OUTPUT'; btn.classList.remove('copied'); }, 1500);
+      });
+    }
+
+    async function loadHealth() {
+      try {
+        const h = await api.get('/api/v1/health');
+        $('#health-text').textContent = (h.status || 'ONLINE').toUpperCase() + (h.repositories ? ` · ${h.repositories} REPO(S)` : '');
+        $('#health-dot').className = 'status-dot' + (h.status === 'healthy' ? ' good' : '');
+      } catch (e) {
+        $('#health-text').textContent = 'OFFLINE';
+        $('#health-dot').className = 'status-dot';
+      }
+    }
+
+    async function loadRepos() {
+      try {
+        repos = (await api.get('/api/v1/repos')).repositories || [];
+        const el = $('#qa-repo');
+        el.innerHTML = repos.map(r => `<option value="${r.id}">${r.name || r.url}</option>`).join('') || '<option value="">— NO REPOSITORIES INDEXED —</option>';
+        
+        renderReposList();
+        if (repos.length) {
+          onRepoChanged();
+        } else {
+          renderKpis(null);
+        }
+      } catch (e) {
+        console.error("Failed to load repositories", e);
+      }
+    }
+
+    async function onRepoChanged() {
+      await refreshRepoDetail();
+      loadFindings();
+      loadRecs();
+      loadArch();
+    }
+
+    async function refreshRepoDetail() {
+      const id = $('#qa-repo').value;
+      if (!id) return;
+      try {
+        const detail = await api.get(`/api/v1/repos/${id}`);
+        renderKpis(detail);
+      } catch (e) { console.error("Failed to load repo detail", e); }
+    }
+
+    function renderKpis(detail) {
+      if (!detail) {
+        $('#kpi-files').textContent = '—';
+        $('#kpi-symbols').textContent = '—';
+        $('#kpi-findings').textContent = '—';
+        $('#kpi-critical').textContent = '—';
+        return;
+      }
+      const s = detail.stats || {};
+      const ing = s.ingestion || {};
+      const pars = s.parsing || {};
+      const sev = detail.findings_by_severity || {};
+
+      // Files: supports both new nested shape (s.ingestion.files) and legacy flat shape (s.files)
+      $('#kpi-files').textContent = ing.files ?? s.files ?? '—';
+
+      // Symbols: function + class counts from parsing phase, or legacy graph/stats
+      const funcs = pars.symbols_by_type?.function || 0;
+      const classes = pars.symbols_by_type?.class || 0;
+      const totalSymbols = funcs + classes;
+      const legacySymbols = s.graph?.node_labels?.Function || s.symbols || 0;
+      $('#kpi-symbols').textContent = totalSymbols > 0 ? totalSymbols : (legacySymbols > 0 ? legacySymbols : '—');
+
+      // Findings: sum across severities (accurate immediately on existing DB)
+      const totalFindings = Object.values(sev).reduce((a, b) => a + b, 0);
+      $('#kpi-findings').textContent = totalFindings || s.findings || (detail.findings?.length ?? '—');
+
+      // Critical alerts: critical + blocker
+      const crit = (sev.critical || 0) + (sev.blocker || 0);
+      $('#kpi-critical').textContent = crit;
+    }
+
+    function renderReposList() {
+      $('#repos-list').innerHTML = repos.map(r => `
+        <div style="background:var(--card-inner); border:1px solid var(--border); padding:16px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <div style="font-family:var(--font-ndot); font-size:12px; color:var(--text);">${r.name || r.url}</div>
+            <div style="color:var(--muted); font-size:10px; margin-top:4px;">
+              BRANCH: <span style="color:var(--cyan);">${r.branch || 'main'}</span> · HASH: ${(r.last_indexed_commit || 'HEAD').slice(0, 7)} · ID: ${r.id.slice(0, 8)}...
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <span class="tag-pill minor">${r.status || 'INDEXED'}</span>
+            <button class="action-btn" onclick="syncRepo('${r.id}', this)">SYNC / UPDATE</button>
+          </div>
+        </div>`).join('') || '<div style="color:var(--muted); padding:20px;">No repositories registered yet. Enter path/URL above.</div>';
+    }
+
+    async function syncRepo(repoId, btnEl) {
+      const orig = btnEl.textContent;
+      btnEl.disabled = true;
+      btnEl.textContent = 'SYNCING...';
+      try {
+        const res = await api.post(`/api/v1/ingest/update/${repoId}`, {});
+        alert(`Incremental update complete for repo ${repoId}!\nDelta report received.`);
+        await loadRepos();
+      } catch (e) {
+        alert(`Sync failed: ${e.message}`);
+      } finally {
+        btnEl.disabled = false;
+        btnEl.textContent = orig;
+      }
+    }
+
+    function runQuickQuery(promptText) {
+      $('#qa-input').value = promptText;
+      switchTab('qa');
+      askQuestion();
+    }
+
+    // TAB 01: AGENTIC Q&A EXECUTION
+    async function askQuestion() {
+      const repo = $('#qa-repo').value, q = $('#qa-input').value.trim();
+      if (!repo || !q) return;
+
+      const btn = $('#qa-ask');
+      btn.disabled = true;
+      btn.textContent = 'EXECUTING...';
+
+      // Reset Stepper & Banners
+      $('#step-idle').className = 'pipe-step done';
+      $('#step-retrieval').className = 'pipe-step active';
+      $('#step-nli').className = 'pipe-step';
+      $('#step-reasoning').className = 'pipe-step';
+      $('#contradiction-banner').style.display = 'none';
+
+      $('#stream-text').innerHTML = `<span style="color:var(--orange)">[SYS]</span> INITIATING AGENTIC RETRIEVAL PIPELINE...\n<span style="color:var(--muted)">[SYS]</span> Scanning knowledge graph &amp; vector embeddings...\n\n`;
+      $('#citations-list').innerHTML = `<span style="color:var(--dim)">Retrieving AST evidence...</span>`;
+      $('#citation-count').textContent = 'SCANNING...';
+
+      rawAnswerText = '';
+      let answerBuffer = '';
+      let citations = [];
+
+      try {
+        const resp = await fetch('/api/v1/query/stream', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ repo_id: repo, question: q })
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+          throw new Error(err.detail || resp.statusText);
+        }
+
+        const reader = resp.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+
+        while (true) {
+          const { value, done: rdone } = await reader.read();
+          if (rdone) break;
+          buf += dec.decode(value, { stream: true });
+          const lines = buf.split('\n\n');
+          buf = lines.pop();
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const ev = JSON.parse(line.slice(6));
+
+              // Stage Tracking
+              if (ev.stage === 'retrieval') {
+                if (ev.status === 'started') {
+                  $('#step-retrieval').className = 'pipe-step active';
+                } else if (ev.status === 'done') {
+                  $('#step-retrieval').className = 'pipe-step done';
+                  $('#step-retrieval').textContent = `[01 RETRIEVAL: ${ev.evidence || 0} CHUNKS]`;
+                }
+              }
+
+              if (ev.stage === 'nli') {
+                if (ev.status === 'started') {
+                  $('#step-nli').className = 'pipe-step active';
+                  $('#step-nli').textContent = '[02 NLI VERIFYING...]';
+                } else if (ev.status === 'done') {
+                  $('#step-nli').className = 'pipe-step done';
+                  $('#step-nli').textContent = `[02 NLI: ${ev.relations || 0} RELS]`;
+                }
+              }
+
+              if (ev.stage === 'answer' && ev.status === 'started') {
+                $('#step-reasoning').className = 'pipe-step active';
+              }
+
+              // Token Streaming (No synthetic trailing spaces!)
+              if (ev.token) {
+                answerBuffer += ev.token;
+                rawAnswerText = answerBuffer;
+                $('#stream-text').innerHTML = formatMarkdown(answerBuffer) + '<span style="color:var(--orange); animation:pulse-dot 0.8s infinite;"> █</span>';
+                $('#stream-text').scrollTop = $('#stream-text').scrollHeight;
+              }
+
+              // Citations & Contradictions
+              if (ev.done) {
+                $('#step-reasoning').className = 'pipe-step done';
+                $('#stream-text').innerHTML = formatMarkdown(answerBuffer);
+
+                // Apply Syntax Highlighting via highlight.js
+                if (window.hljs) {
+                  document.querySelectorAll('#stream-text pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                  });
+                }
+
+                if (ev.citations && ev.citations.length) {
+                  citations = ev.citations;
+                  $('#citation-count').textContent = `${citations.length} CITATIONS`;
+                  $('#citations-list').innerHTML = citations.map(c => `
+                    <div class="citation-item" onclick="inspectCitation('${c.source_file}', ${c.line_start}, ${c.line_end})">
+                      <div class="citation-file">
+                        <span>${c.source_file}:${c.line_start}-${c.line_end}</span>
+                        <button class="copy-btn" onclick="event.stopPropagation(); copyText('${c.source_file}:${c.line_start}', this)">COPY</button>
+                      </div>
+                      <div class="citation-snippet">${(c.snippet || '').slice(0, 100)}...</div>
+                    </div>`).join('');
+
+                  // Render Interactive Force-Directed Knowledge Graph (vis-network)
+                  const container = document.getElementById('graph-trace-content');
+                  if (window.vis && container) {
+                    container.style.height = '240px';
+                    container.innerHTML = '';
+                    const nodes = new vis.DataSet([
+                      { id: 1, label: 'QUERY', shape: 'box', color: '#FF3B00', font: { color: '#000', face: 'Space Mono', size: 10, bold: true }, margin: 8 }
+                    ]);
+                    const edges = new vis.DataSet();
+
+                    citations.forEach((c, i) => {
+                      const nodeId = i + 2;
+                      const fileName = (c.source_file || '').split('/').pop() || c.source_file;
+                      nodes.add({
+                        id: nodeId,
+                        label: `${fileName}:L${c.line_start}`,
+                        title: `${c.source_file} (L${c.line_start}-${c.line_end})`,
+                        shape: 'dot',
+                        size: 13,
+                        color: { background: '#00F2FE', border: '#FFFFFF', highlight: { background: '#00FF66', border: '#FFF' } },
+                        font: { color: '#A8B2C1', face: 'Space Mono', size: 9 }
+                      });
+                      edges.add({
+                        from: 1,
+                        to: nodeId,
+                        arrows: 'to',
+                        color: { color: '#2E3444', highlight: '#00F2FE' },
+                        dashes: true
+                      });
+                    });
+
+                    new vis.Network(container, { nodes, edges }, {
+                      physics: { enabled: true, stabilization: false, barnesHut: { springLength: 70, damping: 0.1 } },
+                      interaction: { hover: true, zoomView: true, dragView: true }
+                    });
+                  } else {
+                    // Graceful fallback to ASCII tree if vis is unavailable
+                    container.innerHTML = `
+                      <div class="tree-node"><span class="tree-branch">●</span> <strong>QUESTION:</strong> "${q.slice(0, 45)}..."</div>
+                      <div class="tree-node"><span class="tree-branch">├──</span> <strong>AGENT ITERATIONS:</strong> ${ev.iterations || 1} Loop(s)</div>
+                      ${citations.slice(0, 4).map((c, i) => `
+                        <div class="tree-node">
+                          <span class="tree-branch">${i === Math.min(3, citations.length - 1) ? '└──' : '├──'}</span>
+                          <span style="color:var(--cyan)">[FILE NODE]</span> ${c.source_file} (L${c.line_start})
+                        </div>`).join('')}`;
+                  }
+                } else {
+                  $('#citation-count').textContent = '0 CITATIONS';
+                  $('#citations-list').innerHTML = '<div style="color:var(--dim)">No direct citations attached to response.</div>';
+                }
+
+                // Contradiction Alert
+                if (ev.contradictions && ev.contradictions.length) {
+                  const cb = $('#contradiction-banner');
+                  cb.style.display = 'block';
+                  cb.innerHTML = `
+                    <div class="contradiction-title">⚠ NLI CROSS-EXAMINATION CONTRADICTION DETECTED (${ev.contradictions.length})</div>
+                    ${ev.contradictions.map(cd => `
+                      <div style="margin-top:4px; color:var(--muted)">
+                        Evidence conflict (Confidence: ${(cd.confidence * 100).toFixed(1)}%):
+                        <div style="font-family:var(--font-mono); font-size:10px; color:#fff;">• "${cd.evidence_a?.slice(0, 80)}..." vs "${cd.evidence_b?.slice(0, 80)}..."</div>
+                      </div>`).join('')}`;
+                }
+              }
+
+              if (ev.error) {
+                $('#stream-text').innerHTML = `<span style="color:var(--orange)">[ERROR]</span> PIPELINE FAILED: ${ev.error}`;
+              }
+            } catch (e) {}
+          }
+        }
+      } catch (e) {
+        $('#stream-text').innerHTML = `<span style="color:var(--orange)">[ERROR]</span> QUERY FAILED: ${e.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'EXECUTE [ENTER]';
+      }
+    }
+
+    async function askInvestigate() {
+      const repo = $('#qa-repo').value, q = $('#qa-input').value.trim();
+      if (!repo || !q) return;
+
+      const btn = $('#qa-investigate');
+      btn.disabled = true;
+      btn.textContent = 'INVESTIGATING...';
+
+      // Reset Stepper & Banners
+      $('#step-idle').className = 'pipe-step done';
+      $('#step-retrieval').className = 'pipe-step active';
+      $('#step-retrieval').textContent = '[01 AGENT PLANNER]';
+      $('#step-nli').className = 'pipe-step';
+      $('#step-nli').textContent = '[02 TOOL ACTIONS]';
+      $('#step-reasoning').className = 'pipe-step';
+      $('#step-reasoning').textContent = '[03 REASONING REPORT]';
+      $('#contradiction-banner').style.display = 'none';
+
+      $('#stream-text').innerHTML = `<span style="color:var(--cyan)">[REACT]</span> Starting ReAct agent... (max 8 steps, 120s)\n<span style="color:var(--muted)">[REACT]</span> Planner → tool selection → observation → reflection loop...\n\n`;
+      $('#citations-list').innerHTML = `<span style="color:var(--dim)">Investigator exploring repository evidence...</span>`;
+      $('#citation-count').textContent = 'INVESTIGATING...';
+      rawAnswerText = '';
+
+      try {
+        const resp = await fetch('/api/v1/query/investigate', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ repo_id: repo, question: q, max_steps: 8, max_time_seconds: 120.0 })
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+          throw new Error(err.detail || resp.statusText);
+        }
+
+        const data = await resp.json();
+        const steps = data.trace || [];
+        const pipeline = steps.map(s => s.action).join(' → ') || '(no steps)';
+
+        let html = `<div style="font-family:var(--font-ndot); font-size:10px; color:var(--cyan); margin-bottom:14px; padding:8px 12px; background:rgba(0,242,254,0.05); border-left:3px solid var(--cyan);">
+          REACT PIPELINE: ${escapeHtml(pipeline)}
+        </div>`;
+
+        steps.forEach(s => {
+          const argsStr = JSON.stringify(s.action_input || s.args || {}).slice(0, 100);
+          const obsStr = JSON.stringify(s.observation || {}).slice(0, 220);
+          html += `<div style="border-left:3px solid var(--cyan); padding:12px 16px; margin-bottom:10px; background:rgba(0,242,254,0.03);">
+            <div style="font-family:var(--font-ndot); font-size:10px; color:var(--cyan); font-weight:700;">
+              STEP ${s.step} — ${escapeHtml(s.action)}(${escapeHtml(argsStr)})
+            </div>
+            <div style="font-size:12px; color:var(--text); margin:8px 0; font-style:italic;">
+              💭 ${escapeHtml((s.thought || '(no thought recorded)').slice(0, 250))}
+            </div>
+            <div style="font-family:var(--font-mono); font-size:10px; color:var(--muted); word-break:break-all; background:rgba(0,0,0,0.4); padding:6px 10px;">
+              obs: ${escapeHtml(obsStr)}${obsStr.length >= 220 ? '...' : ''}
+            </div>
+          </div>`;
+        });
+
+        const budgetLabel = data.budget_exhausted
+          ? '<span style="color:var(--orange)">BUDGET EXHAUSTED</span>'
+          : '<span style="color:var(--green)">COMPLETE</span>';
+
+        html += `<div style="margin-top:14px; padding-top:14px; border-top:1px dashed var(--border); font-family:var(--font-ndot); font-size:10px; color:var(--muted);">
+          STEPS: <span style="color:var(--text);">${data.steps || 0}</span> ·
+          TOKENS: <span style="color:var(--text);">${data.tokens_used || 0}</span> ·
+          ELAPSED: <span style="color:var(--text);">${data.elapsed_seconds || 0}s</span> ·
+          STATUS: ${budgetLabel}
+        </div>`;
+
+        html += `<div style="margin-top:20px; font-family:var(--font-ndot); font-size:11px; color:var(--orange);">FINAL REPORT</div>`;
+        html += `<div class="console-out" style="height:auto; margin-top:10px; border-left-color:var(--cyan);">${formatMarkdown(data.report || '(no report produced)')}</div>`;
+
+        $('#stream-text').innerHTML = html;
+        rawAnswerText = data.report || '';
+
+        if (window.hljs) {
+          document.querySelectorAll('#stream-text pre code').forEach(block => hljs.highlightElement(block));
+        }
+
+        $('#step-retrieval').className = 'pipe-step done';
+        $('#step-nli').className = 'pipe-step done';
+        $('#step-nli').textContent = `[02 TOOLS: ${data.steps || 0} STEPS]`;
+        $('#step-reasoning').className = 'pipe-step done';
+        $('#citation-count').textContent = `${steps.length} INVESTIGATION STEPS`;
+
+        // Render in Citations list
+        if (steps.length) {
+          $('#citations-list').innerHTML = steps.map(s => `
+            <div class="citation-item" style="cursor:default;">
+              <div class="citation-file">
+                <span style="color:var(--orange);">STEP ${s.step}: [${escapeHtml(s.action)}]</span>
+              </div>
+              <div class="citation-snippet" style="margin-top:4px;">
+                <strong style="color:var(--cyan);">Thought:</strong> ${escapeHtml(s.thought || '')}
+              </div>
+            </div>`).join('');
+
+          // Render vis network graph
+          const container = document.getElementById('graph-trace-content');
+          if (window.vis && container) {
+            container.style.height = '240px';
+            container.innerHTML = '';
+            const nodes = new vis.DataSet([
+              { id: 1, label: 'QUERY', shape: 'box', color: '#FF3B00', font: { color: '#000', face: 'Space Mono', size: 10, bold: true }, margin: 8 }
+            ]);
+            const edges = new vis.DataSet();
+
+            steps.forEach((s, i) => {
+              const nodeId = i + 2;
+              const isFinish = s.action === 'finish';
+              nodes.add({
+                id: nodeId,
+                label: `STEP ${s.step}\n${s.action}`,
+                title: s.thought || '',
+                shape: isFinish ? 'box' : 'dot',
+                size: 14,
+                color: { background: isFinish ? '#00FF66' : '#00F2FE', border: '#FFFFFF', highlight: { background: '#FF3B00', border: '#FFF' } },
+                font: { color: '#A8B2C1', face: 'Space Mono', size: 9 }
+              });
+              edges.add({
+                from: i === 0 ? 1 : i + 1,
+                to: nodeId,
+                arrows: 'to',
+                color: { color: isFinish ? '#00FF66' : '#FF3B00', highlight: '#00F2FE' },
+                dashes: false
+              });
+            });
+
+            new vis.Network(container, { nodes, edges }, {
+              physics: { enabled: true, stabilization: false, barnesHut: { springLength: 80, damping: 0.1 } },
+              interaction: { hover: true, zoomView: true, dragView: true }
+            });
+          }
+        } else {
+          $('#citations-list').innerHTML = '<div style="color:var(--dim)">No execution steps recorded.</div>';
+        }
+
+      } catch (e) {
+        $('#stream-text').innerHTML = `<span style="color:var(--orange)">[REACT ERROR]</span> ${escapeHtml(e.message)}`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'INVESTIGATE [REACT]';
+      }
+    }
+
+    function inspectCitation(file, start, end) {
+      alert(`[CITATION EVIDENCE]\nFile: ${file}\nLines: ${start} - ${end}`);
+    }
+
+    // TAB 02: FINDINGS
+    async function loadFindings() {
+      const repo = $('#qa-repo').value;
+      if (!repo) return;
+      const sev = $('#f-sev').value, type = $('#f-type').value;
+      const qs = new URLSearchParams();
+      if (sev) qs.set('severity', sev);
+      if (type) qs.set('finding_type', type);
+      try {
+        const data = await api.get(`/api/v1/findings/${repo}?${qs}`);
+        currentFindings = data.findings || [];
+        renderFindingsTable(currentFindings);
+      } catch (e) {
+        $('#findings-table').innerHTML = `<div style="color:var(--orange); padding:20px;">FAILED TO LOAD FINDINGS: ${e.message}</div>`;
+      }
+    }
+
+    function filterFindings() {
+      const q = ($('#f-search').value || '').toLowerCase().trim();
+      if (!q) {
+        renderFindingsTable(currentFindings);
+        return;
+      }
+      const filtered = currentFindings.filter(f => 
+        (f.rule_id || '').toLowerCase().includes(q) ||
+        (f.file_path || '').toLowerCase().includes(q) ||
+        (f.message || '').toLowerCase().includes(q)
+      );
+      renderFindingsTable(filtered);
+    }
+
+    function renderFindingsTable(list) {
+      if (!list.length) {
+        $('#findings-table').innerHTML = '<div style="color:var(--muted); padding:30px; text-align:center;">No matching code intelligence findings.</div>';
+        return;
+      }
+      $('#findings-table').innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th style="width:110px;">SEVERITY</th>
+              <th style="width:140px;">RULE ID</th>
+              <th style="width:260px;">LOCATION</th>
+              <th>MESSAGE</th>
+              <th style="width:120px; text-align:right;">ACTION</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.map(f => `
+              <tr>
+                <td><span class="tag-pill ${f.severity || 'info'}">${f.severity || 'info'}</span></td>
+                <td style="color:var(--cyan); font-family:var(--font-mono); font-size:11px;">${f.rule_id || '—'}</td>
+                <td style="font-family:var(--font-mono); font-size:11px;">
+                  ${f.file_path}:${f.line_start || 1}
+                  <button class="copy-btn" onclick="copyText('${f.file_path}:${f.line_start}', this)">COPY</button>
+                </td>
+                <td style="font-size:11px; color:#A8B2C1;">${f.message}</td>
+                <td style="text-align:right;">
+                  <button class="action-btn investigate" onclick="investigateFinding('${f.rule_id || ''}', '${f.file_path}', ${f.line_start || 1})">INVESTIGATE</button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    function investigateFinding(rule, file, line) {
+      switchTab('qa');
+      const q = `Analyze finding [${rule}] in ${file}:${line}. What is the vulnerability or code smell, what is the blast radius, and provide a verified remediation patch.`;
+      $('#qa-input').value = q;
+      askQuestion();
+    }
+
+    function exportFindingsReport() {
+      const repoName = $('#qa-repo').selectedOptions[0]?.text || 'repo';
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentFindings, null, 2));
+      const dl = document.createElement('a');
+      dl.setAttribute("href", dataStr);
+      dl.setAttribute("download", `repointel-findings-${repoName.replace(/[^a-zA-Z0-9_-]/g, '_')}-${Date.now()}.json`);
+      dl.click();
+    }
+
+    // TAB 03: RECOMMENDATIONS
+    async function loadRecs() {
+      const repo = $('#qa-repo').value;
+      if (!repo) return;
+      try {
+        const data = await api.get(`/api/v1/findings/${repo}/recommendations?limit=8`);
+        const recs = data.recommendations || [];
+        $('#recs-list').innerHTML = recs.length ? recs.map(r => `
+          <div style="border:1px solid var(--border); background:var(--card-inner); padding:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <div style="display:flex; gap:10px; align-items:center;">
+                <span class="tag-pill ${r.severity}">${r.severity}</span>
+                <span style="color:var(--cyan); font-family:var(--font-mono); font-size:11px;">${r.rule}</span>
+                <span style="color:var(--muted); font-size:11px;">${r.file}:${r.lines}</span>
+              </div>
+              <span style="font-family:var(--font-terminal); color:var(--orange); font-size:19px;">PRIORITY ${Number(r.priority || 0).toFixed(2)}</span>
+            </div>
+            <div style="font-family:var(--font-mono); font-size:12px; margin-bottom:12px; color:#C5CCD8;">${r.message}</div>
+            <div style="border-top:1px dashed var(--border); padding-top:10px; color:var(--muted); font-size:11px; display:flex; justify-content:space-between; align-items:center;">
+              <span>IMPACT BLAST RADIUS: <strong style="color:var(--cyan);">${r.impact ? r.impact.length : 0} TARGETS</strong></span>
+              <button class="action-btn investigate" onclick="investigateFinding('${r.rule}', '${r.file}', '${r.lines.split('-')[0]}')">GENERATE PATCH IN CONSOLE</button>
+            </div>
+          </div>`).join('') : '<div style="color:var(--muted); padding:30px; text-align:center;">No high-priority recommendations detected.</div>';
+      } catch (e) {
+        $('#recs-list').innerHTML = `<div style="color:var(--orange); padding:20px;">FAILED TO LOAD RECOMMENDATIONS: ${e.message}</div>`;
+      }
+    }
+
+    // TAB 04: ARCHITECTURE & BLAST RADIUS
+    async function loadArch() {
+      const repo = $('#qa-repo').value;
+      if (!repo) return;
+      try {
+        const a = await api.get(`/api/v1/architecture/${repo}`);
+        $('#arch-files').textContent = a.code_files ?? 0;
+        $('#arch-funcs').textContent = a.functions ?? 0;
+        $('#arch-classes').textContent = a.classes ?? 0;
+        $('#arch-edges').textContent = a.call_edges ?? 0;
+
+        const hubs = a.top_hub_symbols || [];
+        const maxRef = hubs.length > 0 ? Math.max(...hubs.map(h => h[1])) : 1;
+
+        $('#arch-hubs').innerHTML = hubs.length ? hubs.map(h => `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px dashed var(--border); cursor:pointer;" onclick="selectHubForImpact('${h[0]}')">
+            <span style="font-family:var(--font-mono); font-size:11px; color:var(--cyan);">${h[0] || '—'}</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="ascii-bar">${renderAsciiBar(h[1], maxRef, 8)}</span>
+              <span style="color:var(--muted); font-family:var(--font-mono); font-size:10px; width:25px; text-align:right;">${h[1]}</span>
+            </div>
+          </div>`).join('') : '<div style="color:var(--dim); padding:10px;">NO HUB SYMBOLS RECORDED</div>';
+      } catch (e) {
+        console.error("Architecture load failed", e);
+      }
+    }
+
+    function selectHubForImpact(symbolName) {
+      $('#impact-input').value = symbolName;
+      runManualImpactAnalysis();
+    }
+
+    async function runManualImpactAnalysis() {
+      const repo = $('#qa-repo').value;
+      const symbol = $('#impact-input').value.trim();
+      if (!repo || !symbol) return;
+      const out = $('#impact-result');
+      const canvas = $('#impact-graph-canvas');
+      out.innerHTML = `<span style="color:var(--orange)">[QUERYING GRAPH RETRIEVER FOR BLAST RADIUS: ${symbol}...]</span>`;
+      if (canvas) canvas.style.display = 'none';
+      try {
+        const data = await api.get(`/api/v1/impact/${repo}?symbol=${encodeURIComponent(symbol)}`);
+        const impacted = data.impacted || [];
+        if (!impacted.length) {
+          out.innerHTML = `<div style="color:var(--muted); padding:10px;">No dependent call-edges or downstream blast radius detected for "${symbol}".</div>`;
+          return;
+        }
+
+        // Render vis-network impact graph if available
+        if (window.vis && canvas) {
+          canvas.style.display = 'block';
+          canvas.innerHTML = '';
+          const nodes = new vis.DataSet([
+            { id: 1, label: symbol, shape: 'box', color: '#FF3B00', font: { color: '#000', face: 'Space Mono', size: 11, bold: true }, margin: 8 }
+          ]);
+          const edges = new vis.DataSet();
+          impacted.forEach((node, i) => {
+            const nid = i + 2;
+            const fullId = node.node_id || node.name || JSON.stringify(node);
+            const shortLabel = fullId.split(':').pop().split('.').slice(-2).join('.');
+            nodes.add({
+              id: nid,
+              label: shortLabel,
+              title: `${fullId} [${node.rel || node.label || 'CALLS'}]`,
+              shape: 'dot',
+              size: 11,
+              color: { background: '#00FF66', border: '#FFF', highlight: { background: '#00F2FE', border: '#FFF' } },
+              font: { color: '#A8B2C1', face: 'Space Mono', size: 9 }
+            });
+            edges.add({
+              from: 1,
+              to: nid,
+              arrows: 'to',
+              color: { color: '#2E3444', highlight: '#00FF66' }
+            });
+          });
+          new vis.Network(canvas, { nodes, edges }, {
+            physics: { enabled: true, stabilization: false, barnesHut: { springLength: 80, damping: 0.1 } },
+            interaction: { hover: true, zoomView: true, dragView: true }
+          });
+        }
+
+        out.innerHTML = `
+          <div style="font-family:var(--font-ndot); font-size:10px; color:var(--cyan); margin-bottom:8px;">
+            BLAST RADIUS DETECTED: ${data.total} IMPACTED TARGET(S) FOR [${symbol}]
+          </div>
+          <div class="impact-tree">
+            ${impacted.map((node, i) => `
+              <div class="impact-tree-node">
+                <span class="tree-branch">${i === impacted.length - 1 ? '└──' : '├──'}</span>
+                <span class="node-id">${node.node_id || node.name || JSON.stringify(node)}</span>
+                <span class="node-rel">[${node.rel || node.label || 'DEPENDENCY'}]</span>
+              </div>`).join('')}
+          </div>`;
+      } catch (e) {
+        out.innerHTML = `<span style="color:var(--orange)">IMPACT QUERY FAILED: ${e.message}</span>`;
+      }
+    }
+
+    // TAB 05: INGESTION
+    async function ingest() {
+      const url = $('#ingest-url').value.trim();
+      if (!url) return;
+      const btn = $('#ingest-btn');
+      btn.disabled = true;
+      btn.textContent = 'INGESTING...';
+      $('#ingest-status').innerHTML = '<span style="color:var(--orange)">[SYS] RUNNING PHASE 1 PIPELINE (AST Parsing + Knowledge Graph + Vectorization)...</span>';
+      try {
+        const report = await api.post('/api/v1/ingest', { repo_url: url, fetch_github_data: false });
+        $('#ingest-status').innerHTML = `<span style="color:var(--green)">[OK] INDEXED ${report.phases.ingestion.files} FILES · ${report.phases.analysis.findings} FINDINGS · IN ${report.total_seconds}s</span>`;
+        await loadRepos(); 
+      } catch (e) {
+        $('#ingest-status').innerHTML = `<span style="color:var(--orange)">[ERR] INGESTION FAILED: ${e.message}</span>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'INGEST REPO';
+      }
+    }
+
+    // NAVIGATION SWITCHER
+    function switchTab(name) {
+      document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+      for (const t of ['qa', 'findings', 'recs', 'arch', 'repos']) {
+        const pane = $(`#tab-${t}`);
+        if (pane) pane.style.display = (t === name ? '' : 'none');
+      }
+      if (name === 'findings') loadFindings();
+      if (name === 'recs') loadRecs();
+      if (name === 'arch') loadArch();
+      if (name === 'repos') renderReposList();
+    }
+
+    document.querySelectorAll('nav button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+    $('#qa-ask').onclick = askQuestion;
+    $('#qa-investigate').onclick = askInvestigate;
+    $('#qa-input').addEventListener('keydown', e => { if (e.key === 'Enter') askQuestion(); });
+    $('#ingest-btn').onclick = ingest;
+
+    // Keyboard Shortcuts (1-5 to switch tabs when not typing)
+    document.addEventListener('keydown', e => {
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+      if (e.key === '1') switchTab('qa');
+      if (e.key === '2') switchTab('findings');
+      if (e.key === '3') switchTab('recs');
+      if (e.key === '4') switchTab('arch');
+      if (e.key === '5') switchTab('repos');
+    });
+
+    loadHealth();
+    loadRepos();
+  </script>
+</body>
+</html>

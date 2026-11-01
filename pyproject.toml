@@ -1,0 +1,32 @@
+[project]
+name = "repointel-ai"
+version = "1.1.0"
+description = "LLM-Powered Repository Intelligence Platform"
+requires-python = ">=3.12,<3.14"
+# FIX-020: single source of truth for the Python version. The original doc
+# pinned 3.13-only; widened to 3.12+ so the embedded runtimes used by CI
+# matrixes and dev machines (3.12/3.13) are both supported — the codebase
+# uses no 3.13-only features. Docker stays on python:3.13-slim.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "S"]
+ignore = ["S101"]  # asserts allowed in tests
+
+[tool.ruff.lint.per-file-ignores]
+"backend/tests/**" = ["S101", "S105", "S106"]
+"scripts/create_demo_repo.py" = ["E722"]  # fixture contains deliberate bare except
+
+[tool.black]
+line-length = 100
+target-version = ["py312", "py313"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+markers = [
+    "integration: integration tests (deselect with '-m \"not integration\"')",
+    "e2e: end-to-end tests (slow, require LLM)",
+]

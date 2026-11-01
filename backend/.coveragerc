@@ -1,0 +1,16 @@
+# FIX-052: coverage configuration — excludes hard-to-unit-test wiring so the
+# reported percentage reflects meaningful code.
+[run]
+source = app
+omit =
+    app/__init__.py
+    app/*/__init__.py
+    app/static/*
+    app/main.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    if sys.platform
