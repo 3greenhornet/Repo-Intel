@@ -25,7 +25,7 @@ PyJWT>=2.8
 prometheus-client>=0.20
 
 # Test (§17)
-pytest>=8.0
+pytest>=9.2.0
 
 # Optional production backends — uncomment per deployment target:
 # neo4j>=5.20          # GRAPH_STORE=neo4j
