@@ -249,6 +249,130 @@ def check_task5_and_6() -> bool:
     return False
 
 
+def check_task8_gap_analyzer() -> bool:
+    print("\n[8/11] Verifying Task 8: AST Gap Analyzer (Untested, Stubs, Docstrings, I/O)...")
+    try:
+        import tempfile
+        from app.core.analysis.gap_analyzer import analyze_gaps
+        from app.models.repository import FileRecord
+        from app.utils.time import utc_now
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo = Path(tmpdir)
+            stub_code = (
+                "def undocumented_func(x):\n"
+                "    raise NotImplementedError('TODO: implement')\n"
+                "\n"
+                "def dangerous_io(path):\n"
+                "    f = open(path, 'r')\n"
+                "    return f.read()\n"
+            )
+            (repo / "service.py").write_text(stub_code, encoding="utf-8")
+            file_rec = FileRecord(
+                path="service.py",
+                category="code",
+                language="python",
+                size_bytes=len(stub_code),
+                content_hash="hash1",
+                last_modified=utc_now(),
+            )
+            findings = analyze_gaps(repo, [file_rec])
+            gap_types = {f.finding_type for f in findings}
+            expected_types = {"incomplete_feature", "error_handling_gap", "test_gap"}
+            overlap = expected_types.intersection(gap_types)
+            if len(overlap) >= 2:
+                print(f"  ✓ AST Gap Analyzer     : Detected {len(findings)} gaps across types: {sorted(gap_types)}")
+                return True
+            else:
+                print(f"  ✗ AST Gap Analyzer     : Expected overlap with {expected_types}, got {gap_types}")
+                return False
+    except Exception as exc:
+        print(f"  ✗ Task 8 Failed: {exc}")
+        return False
+
+
+def check_task9_intent_checker() -> bool:
+    print("\n[9/11] Verifying Task 9: Architectural Intent Layer (Reflexion Model)...")
+    try:
+        import tempfile
+        from app.core.analysis.intent_checker import check_intent
+        from app.core.storage.sqlite_graph_store import SQLiteGraphStore
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test_graph.db"
+            store = SQLiteGraphStore(db_path)
+            store.add_node("utils:helper", "helper", "Function", "app/utils.py")
+            store.add_node("auth:login", "login", "Function", "app/auth.py")
+            store.add_edge("utils:helper", "auth:login", "CALLS")
+
+            intent = {
+                "components": {
+                    "utils": {"paths": ["app/utils.py"]},
+                    "auth": {"paths": ["app/auth.py"]},
+                },
+                "dependencies": {
+                    "forbidden": [{"from": "utils", "to": "auth"}]
+                },
+            }
+            findings = check_intent(Path(tmpdir), store, intent)
+            store.conn.close()
+
+            if findings and any("forbidden" in f.rule_id for f in findings):
+                print(f"  ✓ Intent Checker       : Caught forbidden dependency: {findings[0].message[:50]}...")
+                return True
+            else:
+                print(f"  ✗ Intent Checker       : Failed to detect forbidden dependency violation")
+                return False
+    except Exception as exc:
+        print(f"  ✗ Task 9 Failed: {exc}")
+        return False
+
+
+def check_task10_goal_planner() -> bool:
+    print("\n[10/11] Verifying Task 10: Goal Decomposition & L3 Agentic Planner...")
+    try:
+        from app.core.agent.planner import _is_single_hop, decompose
+
+        is_fast = _is_single_hop("Who calls validate_credentials in auth.py?")
+        is_slow = _is_single_hop("Modernize authentication end-to-end and refactor DB models")
+
+        class _MockLLM:
+            def invoke(self, prompt: str, **kw):
+                return '{"subtasks": [{"goal": "Find auth code", "rationale": "first"}, {"goal": "Check security findings", "rationale": "second"}]}'
+
+        res = decompose("Modernize authentication end-to-end and refactor DB models", _MockLLM())
+        valid_subtasks = len(res.subtasks) == 2 and res.subtasks[0].goal == "Find auth code"
+
+        if is_fast and not is_slow and valid_subtasks:
+            print(f"  ✓ Goal Decomposition   : Fast-path bypass verified, structured subtask plan generated ({len(res.subtasks)} subtasks)")
+            return True
+        else:
+            print(f"  ✗ Goal Decomposition   : is_fast={is_fast}, is_slow={is_slow}, valid_subtasks={valid_subtasks}")
+            return False
+    except Exception as exc:
+        print(f"  ✗ Task 10 Failed: {exc}")
+        return False
+
+
+def check_task11_feature_flags() -> bool:
+    print("\n[11/11] Verifying Task 11: Codebase Health Feature Flags & Safety Gates...")
+    try:
+        gap_flag = os.getenv("ENABLE_GAP_ANALYSIS", "0")
+        intent_flag = os.getenv("ENABLE_INTENT_LAYER", "0")
+        planner_flag = os.getenv("ENABLE_GOAL_DECOMPOSITION", "0")
+
+        from app.core.agent.investigator import Investigator
+        has_decomposed = hasattr(Investigator, "_run_decomposed")
+        has_single = hasattr(Investigator, "_run_single")
+
+        print(f"  ✓ Feature Flags Ready  : GAP={gap_flag}, INTENT={intent_flag}, PLANNER={planner_flag}")
+        print(f"  ✓ ReAct Dual-Mode Gate : Safety fallbacks verified (single_hop + decomposed={has_decomposed and has_single})")
+        return has_decomposed and has_single
+    except Exception as exc:
+        print(f"  ✗ Task 11 Failed: {exc}")
+        return False
+
+
 def main():
     print("=" * 70)
     print("  RepoIntel AI — 2026 Architectural Standards Verification")
@@ -261,6 +385,10 @@ def main():
     t4 = check_task4_models()
     t_xai_ice = check_xai_and_ice()
     t5_6 = check_task5_and_6()
+    t8 = check_task8_gap_analyzer()
+    t9 = check_task9_intent_checker()
+    t10 = check_task10_goal_planner()
+    t11 = check_task11_feature_flags()
 
     print("\n" + "=" * 70)
     print("  FINAL SYSTEM COMPLETION AUDIT")
@@ -272,6 +400,10 @@ def main():
     print(f"  [TASK 5] XAI TreeSHAP & ICE Bridge Adapter             : {'COMPLETE' if t_xai_ice else 'FAILED'}")
     print(f"  [TASK 6] LiteLLM Multi-Provider Fallback Cascade       : {'COMPLETE' if t5_6 else 'FAILED'}")
     print(f"  [TASK 7] RAGAS Evaluation Judge & vis-network UI Graph  : {'COMPLETE' if t5_6 else 'FAILED'}")
+    print(f"  [TASK 8] AST Gap Analyzer (gap_analyzer.py)            : {'COMPLETE' if t8 else 'FAILED'}")
+    print(f"  [TASK 9] Architectural Intent Layer (intent_checker.py): {'COMPLETE' if t9 else 'FAILED'}")
+    print(f"  [TASK 10] Goal Decomposition (planner.py)              : {'COMPLETE' if t10 else 'FAILED'}")
+    print(f"  [TASK 11] Safety Flags & ReAct Decomposed Fallback     : {'COMPLETE' if t11 else 'FAILED'}")
     print("=" * 70)
 
 

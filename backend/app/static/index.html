@@ -101,6 +101,7 @@
     }
     .status-dot { width: 6px; height: 6px; background: var(--orange); box-shadow: 0 0 0 1px #000, 0 0 0 2px var(--orange); }
     .status-dot.good { background: var(--green); box-shadow: 0 0 0 1px #000, 0 0 0 2px var(--green); animation: pulse-dot 2s infinite; }
+    .status-dot.warn { background: var(--yellow); box-shadow: 0 0 0 1px #000, 0 0 0 2px var(--yellow); animation: pulse-dot 2.5s infinite; }
     @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
     /* 2. CONSOLIDATED COMMAND BAR */
@@ -149,7 +150,7 @@
     .chip-btn:hover { border-color: var(--orange); color: var(--orange); background: var(--orange-dim); }
 
     /* 3. BENTO METRICS GRID */
-    .bento-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .bento-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
     .metric-card {
       background: var(--card); border: 1px solid var(--border);
       padding: 16px; display: flex; flex-direction: column; justify-content: space-between;
@@ -369,6 +370,11 @@
         <div class="metric-value" id="kpi-critical" style="color: var(--orange)">—</div>
         <svg class="sparkline-svg" viewBox="0 0 100 20" style="stroke-width:2.5;"><path d="M0 19 L30 15 L60 17 L80 4 L100 6" /></svg>
       </div>
+      <div class="metric-card" style="border-color: rgba(0,242,254,0.3);">
+        <div class="metric-header" style="color:var(--cyan);">05 CODEBASE HEALTH <span style="color:var(--cyan)">[GRADE]</span></div>
+        <div class="metric-value" id="kpi-health" style="color: var(--cyan)">—</div>
+        <svg class="sparkline-svg cyan" viewBox="0 0 100 20"><path d="M0 15 L25 12 L50 8 L75 5 L100 3" /></svg>
+      </div>
     </div>
 
     <!-- 4. NAVIGATION -->
@@ -378,6 +384,7 @@
       <button data-tab="recs">03 // RECOMMENDATIONS</button>
       <button data-tab="arch">04 // ARCHITECTURE &amp; IMPACT</button>
       <button data-tab="repos">05 // REPOSITORIES</button>
+      <button data-tab="health">06 // CODEBASE HEALTH</button>
     </nav>
 
     <!-- 5. VIEWPORT PANELS -->
@@ -436,6 +443,11 @@
             <option value="vulnerability">vulnerability</option>
             <option value="bug">bug</option>
             <option value="code_smell">code smell</option>
+            <option value="test_gap">test gap (untested module)</option>
+            <option value="doc_gap">doc gap (missing docstring)</option>
+            <option value="incomplete_feature">incomplete feature (stub)</option>
+            <option value="error_handling_gap">error handling gap</option>
+            <option value="architecture_violation">architecture violation</option>
           </select>
           <div style="flex:1;"></div>
           <button class="btn-exec" style="background:transparent; border:1px solid var(--border); color:var(--text); box-shadow:none; padding:9px 16px;" onclick="exportFindingsReport()">EXPORT JSON REPORT</button>
@@ -460,7 +472,7 @@
           </div>
           
           <div style="border:1px solid var(--border); background:var(--card-inner); padding:20px;">
-            <div style="font-family:var(--font-ndot); font-size:10px; color:var(--muted); margin-bottom:16px;">02 // TOP HUB SYMBOLS (CLICK TO ANALYZE BLAST RADIUS)</div>
+            <div style="font-family:var(--font-ndot); font-size:10px; color:var(--muted); margin-bottom:16px;">02 // MOST-CALLED SYMBOLS <span style="color:var(--dim); font-size:9px;">(click to see blast radius — what breaks if this changes)</span></div>
             <div id="arch-hubs"></div>
           </div>
         </div>
@@ -490,6 +502,67 @@
         <div id="repos-list"></div>
       </div>
 
+      <!-- TAB 6: CODEBASE HEALTH -->
+      <div id="tab-health" style="display:none">
+        <!-- Health score banner -->
+        <div style="display:grid; grid-template-columns:1fr 2fr; gap:16px; margin-bottom:20px;">
+          <div style="border:1px solid var(--border); background:var(--card-inner); padding:24px; text-align:center;">
+            <div style="font-family:var(--font-ndot); font-size:10px; color:var(--muted); margin-bottom:12px;">
+              CODEBASE HEALTH SCORE
+            </div>
+            <div id="health-score-value" style="font-family:var(--font-terminal); font-size:72px; color:var(--cyan); line-height:1;">—</div>
+            <div id="health-grade" style="font-family:var(--font-ndot); font-size:14px; color:var(--green); margin-top:8px;">—</div>
+          </div>
+          <div style="border:1px solid var(--border); background:var(--card-inner); padding:20px;">
+            <div style="font-family:var(--font-ndot); font-size:10px; color:var(--muted); margin-bottom:14px;">
+              SEVERITY BREAKDOWN
+            </div>
+            <div id="health-severity" style="display:flex; flex-direction:column; gap:6px;"></div>
+          </div>
+        </div>
+
+        <!-- Gap analysis grid -->
+        <div style="border:1px solid var(--border); background:var(--card-inner); padding:20px; margin-bottom:20px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <div style="font-family:var(--font-ndot); font-size:10px; color:var(--orange);">
+              GAP ANALYSIS — WHAT'S MISSING
+            </div>
+            <span style="font-size:10px; color:var(--dim); font-family:var(--font-mono);">CLICK ANY GAP TO VIEW DETAILS IN FINDINGS</span>
+          </div>
+          <div id="gap-grid" style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px;"></div>
+        </div>
+
+        <!-- Intent violations -->
+        <div style="border:1px solid var(--border); background:var(--card-inner); padding:20px;">
+          <div style="font-family:var(--font-ndot); font-size:10px; color:var(--cyan); margin-bottom:14px;">
+            INTENT VIOLATIONS (REFLEXION MODEL)
+          </div>
+          <div id="intent-violations" style="color:var(--muted); font-size:11px;">Loading architecture rules...</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- CITATION CODE INSPECTOR MODAL -->
+    <div id="citation-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(4px); z-index:10000; padding:40px 20px; overflow:auto;" onclick="if(event.target===this)closeCitationModal()">
+      <div style="max-width:960px; margin:0 auto; background:var(--card); border:1px solid var(--border); border-left:3px solid var(--cyan); box-shadow:0 12px 48px rgba(0,0,0,0.9);">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:14px 20px; border-bottom:1px solid var(--border); background:var(--card-inner); flex-wrap:wrap; gap:10px;">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="tag-pill minor" id="modal-lang">CODE</span>
+              <span id="modal-file" style="font-family:var(--font-mono); font-size:12px; color:var(--cyan); font-weight:700;"></span>
+            </div>
+            <div id="modal-lines" style="font-family:var(--font-mono); font-size:11px; color:var(--muted); margin-top:4px;"></div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button class="copy-btn" id="modal-copy-btn" onclick="copyModalSnippet(this)">COPY SNIPPET</button>
+            <button class="copy-btn" id="modal-path-btn" onclick="copyModalPath(this)">COPY PATH</button>
+            <button class="copy-btn" id="modal-vscode-btn" onclick="openInVSCode()">OPEN IN VS CODE</button>
+            <button class="copy-btn" style="border-color:var(--orange); color:var(--orange);" onclick="closeCitationModal()">CLOSE [ESC]</button>
+          </div>
+        </div>
+        <div id="modal-code" style="padding:16px 0; overflow-x:auto; font-family:var(--font-mono); font-size:12px; line-height:1.6; max-height:70vh;"></div>
+      </div>
     </div>
 
   </div>
@@ -615,8 +688,10 @@
     async function loadHealth() {
       try {
         const h = await api.get('/api/v1/health');
-        $('#health-text').textContent = (h.status || 'ONLINE').toUpperCase() + (h.repositories ? ` · ${h.repositories} REPO(S)` : '');
-        $('#health-dot').className = 'status-dot' + (h.status === 'healthy' ? ' good' : '');
+        const isDegraded = h.status === 'degraded';
+        const label = isDegraded ? 'ONLINE (LITE)' : (h.status || 'ONLINE').toUpperCase();
+        $('#health-text').textContent = label + (h.repositories ? ` · ${h.repositories} REPO(S)` : '');
+        $('#health-dot').className = 'status-dot ' + (isDegraded ? 'warn' : (h.status === 'healthy' ? 'good' : ''));
       } catch (e) {
         $('#health-text').textContent = 'OFFLINE';
         $('#health-dot').className = 'status-dot';
@@ -686,6 +761,16 @@
       // Critical alerts: critical + blocker
       const crit = (sev.critical || 0) + (sev.blocker || 0);
       $('#kpi-critical').textContent = crit;
+
+      // Health score (async, non-blocking)
+      api.get(`/api/v1/repos/${detail.id}/health-score`)
+        .then(h => {
+          const el = $('#kpi-health');
+          if (el && h && h.health_score !== undefined) {
+            el.textContent = `${h.health_score} [${h.grade}]`;
+          }
+        })
+        .catch(() => {});
     }
 
     function renderReposList() {
@@ -704,16 +789,24 @@
         </div>`).join('') || '<div style="color:var(--muted); padding:20px;">No repositories registered yet. Enter path/URL above.</div>';
     }
 
+    function showToast(msg, isError = false) {
+      const note = document.createElement('div');
+      note.style.cssText = `position:fixed; bottom:24px; right:24px; background:var(--card); border:1px solid ${isError ? 'var(--orange)' : 'var(--cyan)'}; color:${isError ? 'var(--orange)' : 'var(--cyan)'}; padding:10px 18px; font-family:var(--font-ndot); font-size:11px; z-index:10000; box-shadow:0 8px 24px rgba(0,0,0,0.8);`;
+      note.innerHTML = escapeHtml(msg);
+      document.body.appendChild(note);
+      setTimeout(() => note.remove(), 2500);
+    }
+
     async function syncRepo(repoId, btnEl) {
       const orig = btnEl.textContent;
       btnEl.disabled = true;
       btnEl.textContent = 'SYNCING...';
       try {
         const res = await api.post(`/api/v1/ingest/update/${repoId}`, {});
-        alert(`Incremental update complete for repo ${repoId}!\nDelta report received.`);
+        showToast(`[SYNC COMPLETE] Repo ${repoId.slice(0, 8)} updated successfully`);
         await loadRepos();
       } catch (e) {
-        alert(`Sync failed: ${e.message}`);
+        showToast(`[SYNC FAILED] ${e.message}`, true);
       } finally {
         btnEl.disabled = false;
         btnEl.textContent = orig;
@@ -825,14 +918,17 @@
                 if (ev.citations && ev.citations.length) {
                   citations = ev.citations;
                   $('#citation-count').textContent = `${citations.length} CITATIONS`;
-                  $('#citations-list').innerHTML = citations.map(c => `
-                    <div class="citation-item" onclick="inspectCitation('${c.source_file}', ${c.line_start}, ${c.line_end})">
+                  $('#citations-list').innerHTML = citations.map(c => {
+                    const cleanPath = (c.source_file || '').replace(/\\/g, '/');
+                    return `
+                    <div class="citation-item" onclick="inspectCitation('${cleanPath}', ${c.line_start}, ${c.line_end})">
                       <div class="citation-file">
-                        <span>${c.source_file}:${c.line_start}-${c.line_end}</span>
-                        <button class="copy-btn" onclick="event.stopPropagation(); copyText('${c.source_file}:${c.line_start}', this)">COPY</button>
+                        <span>${cleanPath}:${c.line_start}-${c.line_end}</span>
+                        <button class="copy-btn" onclick="event.stopPropagation(); copyText('${cleanPath}:${c.line_start}', this)">COPY</button>
                       </div>
                       <div class="citation-snippet">${(c.snippet || '').slice(0, 100)}...</div>
-                    </div>`).join('');
+                    </div>`;
+                  }).join('');
 
                   // Render Interactive Force-Directed Knowledge Graph (vis-network)
                   const container = document.getElementById('graph-trace-content');
@@ -846,11 +942,12 @@
 
                     citations.forEach((c, i) => {
                       const nodeId = i + 2;
-                      const fileName = (c.source_file || '').split('/').pop() || c.source_file;
+                      const cleanPath = (c.source_file || '').replace(/\\/g, '/');
+                      const fileName = cleanPath.split('/').pop() || cleanPath;
                       nodes.add({
                         id: nodeId,
                         label: `${fileName}:L${c.line_start}`,
-                        title: `${c.source_file} (L${c.line_start}-${c.line_end})`,
+                        title: `${cleanPath} (L${c.line_start}-${c.line_end})`,
                         shape: 'dot',
                         size: 13,
                         color: { background: '#00F2FE', border: '#FFFFFF', highlight: { background: '#00FF66', border: '#FFF' } },
@@ -936,6 +1033,33 @@
       $('#citation-count').textContent = 'INVESTIGATING...';
       rawAnswerText = '';
 
+      const startTime = Date.now();
+      const phases = [
+        "Analyzing repository knowledge graph & findings...",
+        "Evaluating candidate entrypoints & call-chains...",
+        "Gathering AST symbols & semantic code evidence...",
+        "Reflecting on intermediate observations...",
+        "Synthesizing multi-hop reasoning & verified patch..."
+      ];
+      const timerInterval = setInterval(() => {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        const phaseIdx = Math.min(Math.floor(elapsed / 7), phases.length - 1);
+        const dots = '.'.repeat((Math.floor(elapsed) % 3) + 1);
+        $('#stream-text').innerHTML = `
+          <div style="font-family:var(--font-ndot); color:var(--cyan); font-size:12px; margin-bottom:12px;">
+            <span style="display:inline-block; width:8px; height:8px; background:var(--cyan); border-radius:50%; margin-right:8px; box-shadow:0 0 8px var(--cyan);"></span>
+            [REACT AGENT ACTIVE · ELAPSED: <span style="color:#FFF;">${elapsed}s</span>]
+          </div>
+          <div style="font-family:var(--font-mono); font-size:12px; color:var(--text); line-height:1.6; background:rgba(0,242,254,0.03); border:1px solid rgba(0,242,254,0.15); padding:12px 16px;">
+            <div style="color:var(--orange); font-weight:700;">▶ PHASE: ${phases[phaseIdx]}${dots}</div>
+            <div style="color:var(--muted); font-size:11px; margin-top:8px;">
+              • Active Planner: ReAct loop (Thought → Action → Observation → Reflection)<br/>
+              • Tools: search_code, get_findings, get_callers, get_impact, get_architecture<br/>
+              • Multi-hop evidence grounding & self-correction in progress...
+            </div>
+          </div>`;
+      }, 1000);
+
       try {
         const resp = await fetch('/api/v1/query/investigate', {
           method: 'POST',
@@ -1001,7 +1125,30 @@
 
         // Render in Citations list
         if (steps.length) {
-          $('#citations-list').innerHTML = steps.map(s => `
+          let citationsHtml = '';
+          if (data.citations && data.citations.length) {
+            citationsHtml = `
+              <div style="font-family:var(--font-ndot); font-size:9px; color:var(--muted); margin-bottom:8px;">
+                CITED EVIDENCE (${data.citations.length})
+              </div>
+              ${data.citations.map(c => {
+                const cleanPath = (c.source_file || '').replace(/\\/g, '/');
+                return `
+                  <div class="citation-item" onclick="inspectCitation('${cleanPath}', ${c.line_start}, ${c.line_end})">
+                    <div class="citation-file">
+                      <span>${cleanPath}:${c.line_start}-${c.line_end}</span>
+                      <button class="copy-btn" onclick="event.stopPropagation(); copyText('${cleanPath}:${c.line_start}', this)">COPY</button>
+                    </div>
+                    <div class="citation-snippet">${escapeHtml((c.snippet || '').slice(0, 100))}...</div>
+                  </div>`;
+              }).join('')}
+              <div style="font-family:var(--font-ndot); font-size:9px; color:var(--muted); margin:14px 0 8px;">
+                EXECUTION TRACE (${steps.length} STEPS)
+              </div>
+            `;
+          }
+
+          $('#citations-list').innerHTML = citationsHtml + steps.map(s => `
             <div class="citation-item" style="cursor:default;">
               <div class="citation-file">
                 <span style="color:var(--orange);">STEP ${s.step}: [${escapeHtml(s.action)}]</span>
@@ -1010,6 +1157,12 @@
                 <strong style="color:var(--cyan);">Thought:</strong> ${escapeHtml(s.thought || '')}
               </div>
             </div>`).join('');
+
+          if (data.citations && data.citations.length) {
+            $('#citation-count').textContent = `${steps.length} STEPS · ${data.citations.length} CITATIONS`;
+          } else {
+            $('#citation-count').textContent = `${steps.length} STEPS`;
+          }
 
           // Render vis network graph
           const container = document.getElementById('graph-trace-content');
@@ -1054,13 +1207,103 @@
       } catch (e) {
         $('#stream-text').innerHTML = `<span style="color:var(--orange)">[REACT ERROR]</span> ${escapeHtml(e.message)}`;
       } finally {
+        if (typeof timerInterval !== 'undefined') clearInterval(timerInterval);
         btn.disabled = false;
         btn.textContent = 'INVESTIGATE [REACT]';
       }
     }
 
-    function inspectCitation(file, start, end) {
-      alert(`[CITATION EVIDENCE]\nFile: ${file}\nLines: ${start} - ${end}`);
+    let _activeCitation = null;
+
+    async function inspectCitation(file, start, end) {
+      const repo = $('#qa-repo').value;
+      if (!repo) return;
+
+      const modal = $('#citation-modal');
+      const codeEl = $('#modal-code');
+      const cleanPath = (file || '').replace(/\\/g, '/');
+      const s = parseInt(start, 10) || 1;
+      const e = parseInt(end, 10) || s;
+
+      _activeCitation = { file: cleanPath, start: s, end: e, absPath: cleanPath, rawCode: '' };
+
+      $('#modal-file').textContent = cleanPath;
+      $('#modal-lines').textContent = `Lines ${s}–${e} · Retrieving context...`;
+      $('#modal-lang').textContent = cleanPath.split('.').pop()?.toUpperCase() || 'CODE';
+      codeEl.innerHTML = '<div style="padding:20px; color:var(--cyan); font-family:var(--font-mono);">[SYS] FETCHING VERIFIED REPOSITORY EVIDENCE CONTEXT...</div>';
+      modal.style.display = 'block';
+
+      try {
+        const data = await api.get(
+          `/api/v1/repos/${repo}/file?path=${encodeURIComponent(cleanPath)}&start_line=${s}&end_line=${e}&context=4`
+        );
+        _activeCitation.absPath = data.absolute_path || cleanPath;
+        _activeCitation.rawCode = (data.lines || []).map(l => l.text).join('\n');
+
+        $('#modal-lines').textContent = `Lines ${s}–${e} of ${data.total_lines} · ${data.language.toUpperCase()}`;
+        $('#modal-lang').textContent = data.language.toUpperCase();
+
+        const html = data.lines.map(line => {
+          const isTarget = line.n >= s && line.n <= e;
+          const bg = isTarget ? 'background:rgba(0,242,254,0.08); border-left:3px solid var(--cyan);' : 'border-left:3px solid transparent;';
+          const numColor = isTarget ? 'var(--cyan)' : 'var(--dim)';
+          const textColor = isTarget ? '#FFFFFF' : 'var(--text)';
+          const weight = isTarget ? 'font-weight:700;' : '';
+          return `<div style="${bg} display:flex; gap:16px; padding:2px 14px; font-family:var(--font-mono); font-size:12px;">
+            <span style="color:${numColor}; min-width:44px; text-align:right; user-select:none; ${weight}">${line.n}</span>
+            <span style="color:${textColor}; white-space:pre; ${weight}">${escapeHtml(line.text)}</span>
+          </div>`;
+        }).join('');
+
+        codeEl.innerHTML = html;
+      } catch (err) {
+        codeEl.innerHTML = `
+          <div style="padding:20px; color:var(--orange); font-family:var(--font-mono);">
+            [ERR] COULD NOT RETRIEVE FILE CONTENT: ${escapeHtml(err.message)}<br/>
+            <span style="color:var(--muted); font-size:11px; margin-top:8px; display:block;">File reference: ${cleanPath}:${s}-${e}</span>
+          </div>`;
+      }
+    }
+
+    function closeCitationModal() {
+      const modal = $('#citation-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function copyModalSnippet(btn) {
+      if (!_activeCitation || !_activeCitation.rawCode) return;
+      navigator.clipboard.writeText(_activeCitation.rawCode).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'COPIED';
+        btn.classList.add('copied');
+        showToast(`[SNIPPET COPIED] ${_activeCitation.file}:${_activeCitation.start}-${_activeCitation.end}`);
+        setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
+      });
+    }
+
+    function copyModalPath(btn) {
+      if (!_activeCitation) return;
+      const target = `${_activeCitation.file}:${_activeCitation.start}-${_activeCitation.end}`;
+      navigator.clipboard.writeText(target).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'COPIED';
+        btn.classList.add('copied');
+        showToast(`[PATH COPIED] ${target}`);
+        setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
+      });
+    }
+
+    function openInVSCode() {
+      if (!_activeCitation) return;
+      const targetPath = _activeCitation.absPath || _activeCitation.file;
+      const uri = `vscode://file/${encodeURI(targetPath.replace(/\\/g, '/'))}:${_activeCitation.start}`;
+      try {
+        window.open(uri, '_blank');
+      } catch (e) {
+        window.location.href = uri;
+      }
+      showToast(`[VS CODE] Protocol link dispatched: ${_activeCitation.file}:${_activeCitation.start}`);
+      setTimeout(() => closeCitationModal(), 400);
     }
 
     // TAB 02: FINDINGS
@@ -1111,19 +1354,22 @@
             </tr>
           </thead>
           <tbody>
-            ${list.map(f => `
+            ${list.map(f => {
+              const cleanPath = (f.file_path || '').replace(/\\/g, '/');
+              return `
               <tr>
                 <td><span class="tag-pill ${f.severity || 'info'}">${f.severity || 'info'}</span></td>
                 <td style="color:var(--cyan); font-family:var(--font-mono); font-size:11px;">${f.rule_id || '—'}</td>
                 <td style="font-family:var(--font-mono); font-size:11px;">
-                  ${f.file_path}:${f.line_start || 1}
-                  <button class="copy-btn" onclick="copyText('${f.file_path}:${f.line_start}', this)">COPY</button>
+                  ${cleanPath}:${f.line_start || 1}
+                  <button class="copy-btn" onclick="copyText('${cleanPath}:${f.line_start}', this)">COPY</button>
                 </td>
                 <td style="font-size:11px; color:#A8B2C1;">${f.message}</td>
                 <td style="text-align:right;">
-                  <button class="action-btn investigate" onclick="investigateFinding('${f.rule_id || ''}', '${f.file_path}', ${f.line_start || 1})">INVESTIGATE</button>
+                  <button class="action-btn investigate" onclick="investigateFinding('${f.rule_id || ''}', '${cleanPath}', ${f.line_start || 1})">INVESTIGATE</button>
                 </td>
-              </tr>`).join('')}
+              </tr>`;
+            }).join('')}
           </tbody>
         </table>`;
     }
@@ -1132,7 +1378,7 @@
       switchTab('qa');
       const q = `Analyze finding [${rule}] in ${file}:${line}. What is the vulnerability or code smell, what is the blast radius, and provide a verified remediation patch.`;
       $('#qa-input').value = q;
-      askQuestion();
+      askInvestigate();
     }
 
     function exportFindingsReport() {
@@ -1151,22 +1397,25 @@
       try {
         const data = await api.get(`/api/v1/findings/${repo}/recommendations?limit=8`);
         const recs = data.recommendations || [];
-        $('#recs-list').innerHTML = recs.length ? recs.map(r => `
+        $('#recs-list').innerHTML = recs.length ? recs.map(r => {
+          const cleanFile = (r.file || '').replace(/\\/g, '/');
+          return `
           <div style="border:1px solid var(--border); background:var(--card-inner); padding:16px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
               <div style="display:flex; gap:10px; align-items:center;">
                 <span class="tag-pill ${r.severity}">${r.severity}</span>
                 <span style="color:var(--cyan); font-family:var(--font-mono); font-size:11px;">${r.rule}</span>
-                <span style="color:var(--muted); font-size:11px;">${r.file}:${r.lines}</span>
+                <span style="color:var(--muted); font-size:11px;">${cleanFile}:${r.lines}</span>
               </div>
               <span style="font-family:var(--font-terminal); color:var(--orange); font-size:19px;">PRIORITY ${Number(r.priority || 0).toFixed(2)}</span>
             </div>
             <div style="font-family:var(--font-mono); font-size:12px; margin-bottom:12px; color:#C5CCD8;">${r.message}</div>
             <div style="border-top:1px dashed var(--border); padding-top:10px; color:var(--muted); font-size:11px; display:flex; justify-content:space-between; align-items:center;">
               <span>IMPACT BLAST RADIUS: <strong style="color:var(--cyan);">${r.impact ? r.impact.length : 0} TARGETS</strong></span>
-              <button class="action-btn investigate" onclick="investigateFinding('${r.rule}', '${r.file}', '${r.lines.split('-')[0]}')">GENERATE PATCH IN CONSOLE</button>
+              <button class="action-btn investigate" onclick="investigateFinding('${r.rule}', '${cleanFile}', '${r.lines.split('-')[0]}')">GENERATE PATCH IN CONSOLE</button>
             </div>
-          </div>`).join('') : '<div style="color:var(--muted); padding:30px; text-align:center;">No high-priority recommendations detected.</div>';
+          </div>`;
+        }).join('') : '<div style="color:var(--muted); padding:30px; text-align:center;">No high-priority recommendations detected.</div>';
       } catch (e) {
         $('#recs-list').innerHTML = `<div style="color:var(--orange); padding:20px;">FAILED TO LOAD RECOMMENDATIONS: ${e.message}</div>`;
       }
@@ -1291,10 +1540,86 @@
       }
     }
 
+    // CODEBASE HEALTH TAB LOADER
+    async function loadHealthTab() {
+      const repo = $('#qa-repo').value;
+      if (!repo) return;
+      try {
+        const [score, gaps, intent] = await Promise.all([
+          api.get(`/api/v1/repos/${repo}/health-score`),
+          api.get(`/api/v1/repos/${repo}/gaps`),
+          api.get(`/api/v1/repos/${repo}/intent`).catch(() => ({ violations: [], total: 0 })),
+        ]);
+
+        // Health score banner
+        $('#health-score-value').textContent = score.health_score;
+        const gradeEl = $('#health-grade');
+        gradeEl.textContent = `GRADE ${score.grade}`;
+        gradeEl.style.color =
+          score.grade === 'A' ? 'var(--green)' :
+          score.grade === 'B' ? 'var(--cyan)' :
+          score.grade === 'C' ? 'var(--yellow)' : 'var(--orange)';
+
+        // Severity breakdown
+        const sev = score.by_severity || {};
+        const maxSev = Math.max(1, ...Object.values(sev));
+        $('#health-severity').innerHTML = ['blocker', 'critical', 'major', 'minor', 'info']
+          .filter(k => sev[k] !== undefined)
+          .map(k => `
+            <div style="display:flex; justify-content:space-between; align-items:center; font-family:var(--font-mono); font-size:11px;">
+              <span class="tag-pill ${k}" style="min-width:80px;">${k.toUpperCase()}</span>
+              <span class="ascii-bar" style="color:var(--cyan);">${renderAsciiBar(sev[k], maxSev, 12)}</span>
+              <span style="color:var(--text); width:40px; text-align:right;">${sev[k]}</span>
+            </div>
+          `).join('') || '<div style="color:var(--dim)">No findings recorded</div>';
+
+        // Gap analysis grid
+        const byType = gaps.by_type || {};
+        const gapMeta = {
+          'test_gap': { label: 'UNTESTED MODULES', color: 'var(--orange)', icon: '⚠' },
+          'doc_gap': { label: 'MISSING DOCSTRINGS', color: 'var(--yellow)', icon: '□' },
+          'incomplete_feature': { label: 'INCOMPLETE STUBS', color: 'var(--cyan)', icon: '◐' },
+          'error_handling_gap': { label: 'UNGUARDED I/O', color: '#FF6B6B', icon: '⚡' },
+        };
+
+        $('#gap-grid').innerHTML = Object.entries(gapMeta).map(([type, meta]) => {
+          const count = byType[type] || 0;
+          return `
+            <div onclick="filterToGapType('${type}')" style="border:1px solid var(--border); padding:16px; background:#000; text-align:center; cursor:pointer; transition:border-color 0.15s;" onmouseover="this.style.borderColor=meta.color" onmouseout="this.style.borderColor='var(--border)'">
+              <div style="font-family:var(--font-terminal); font-size:36px; color:${meta.color}; line-height:1;">${count}</div>
+              <div style="font-family:var(--font-ndot); font-size:9px; color:var(--muted); margin-top:8px;">${meta.label}</div>
+            </div>
+          `;
+        }).join('');
+
+        // Intent violations
+        const violations = intent.violations || [];
+        $('#intent-violations').innerHTML = violations.length ? violations.map(v => `
+          <div style="border-left:3px solid var(--orange); padding:8px 12px; margin-bottom:8px; background:rgba(255,59,0,0.05);">
+            <div style="color:var(--orange); font-family:var(--font-ndot); font-size:9px;">${v.rule_id}</div>
+            <div style="color:var(--text); margin-top:4px;">${escapeHtml(v.message)}</div>
+          </div>
+        `).join('') : '<div style="color:var(--dim); padding:8px;">No intent violations detected (or architecture.yml absent).</div>';
+
+      } catch (e) {
+        console.error('Health tab load failed', e);
+        $('#health-score-value').textContent = 'ERR';
+      }
+    }
+
+    function filterToGapType(type) {
+      switchTab('findings');
+      const select = $('#f-type');
+      if (select) {
+        select.value = type;
+        loadFindings();
+      }
+    }
+
     // NAVIGATION SWITCHER
     function switchTab(name) {
       document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-      for (const t of ['qa', 'findings', 'recs', 'arch', 'repos']) {
+      for (const t of ['qa', 'findings', 'recs', 'arch', 'repos', 'health']) {
         const pane = $(`#tab-${t}`);
         if (pane) pane.style.display = (t === name ? '' : 'none');
       }
@@ -1302,6 +1627,7 @@
       if (name === 'recs') loadRecs();
       if (name === 'arch') loadArch();
       if (name === 'repos') renderReposList();
+      if (name === 'health') loadHealthTab();
     }
 
     document.querySelectorAll('nav button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
@@ -1310,14 +1636,19 @@
     $('#qa-input').addEventListener('keydown', e => { if (e.key === 'Enter') askQuestion(); });
     $('#ingest-btn').onclick = ingest;
 
-    // Keyboard Shortcuts (1-5 to switch tabs when not typing)
+    // Keyboard Shortcuts (1-6 to switch tabs, Esc to close modal)
     document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        closeCitationModal();
+        return;
+      }
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
       if (e.key === '1') switchTab('qa');
       if (e.key === '2') switchTab('findings');
       if (e.key === '3') switchTab('recs');
       if (e.key === '4') switchTab('arch');
       if (e.key === '5') switchTab('repos');
+      if (e.key === '6') switchTab('health');
     });
 
     loadHealth();

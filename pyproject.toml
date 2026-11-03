@@ -2,7 +2,7 @@
 name = "repointel-ai"
 version = "1.1.0"
 description = "LLM-Powered Repository Intelligence Platform"
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.12,<3.15"
 # FIX-020: single source of truth for the Python version. The original doc
 # pinned 3.13-only; widened to 3.12+ so the embedded runtimes used by CI
 # matrixes and dev machines (3.12/3.13) are both supported — the codebase

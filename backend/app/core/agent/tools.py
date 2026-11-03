@@ -136,7 +136,34 @@ class ToolExecutor:
         except Exception as exc:
             logger.warning("get_callers failed: %s", exc)
             return {"callers": [], "error": str(exc)[:200]}
-        return {"callers": records}
+
+        if records:
+            return {"callers": records}
+
+        # Disambiguate "symbol exists but has no callers" from "symbol not found"
+        try:
+            lookup = self.phase1.graph_store.graph_search(
+                repo_id, GraphIntent(type="symbol_lookup", target=symbol), top_k=5)
+        except Exception:
+            lookup = []
+
+        if lookup:
+            label = (lookup[0].get("label") or lookup[0].get("entity_type") or "symbol").lower()
+            return {
+                "callers": [],
+                "note": (
+                    f"'{symbol}' exists in the code graph as a {label} but has no "
+                    f"CALLS edges. It is likely a variable, constant, or entry-point "
+                    f"function. Try search_code to find its usages instead."
+                ),
+            }
+        return {
+            "callers": [],
+            "note": (
+                f"'{symbol}' was not found in the code graph. Check the spelling, "
+                f"or try search_code with a keyword description of what it does."
+            ),
+        }
 
     def _get_impact(self, repo_id: str, symbol: str) -> dict[str, Any]:
         try:
@@ -144,7 +171,33 @@ class ToolExecutor:
         except Exception as exc:
             logger.warning("get_impact failed: %s", exc)
             return {"impacted": [], "error": str(exc)[:200]}
-        return {"impacted": records[:20]}
+
+        if records:
+            return {"impacted": records[:20]}
+
+        try:
+            lookup = self.phase1.graph_store.graph_search(
+                repo_id, GraphIntent(type="symbol_lookup", target=symbol), top_k=5)
+        except Exception:
+            lookup = []
+
+        if lookup:
+            label = (lookup[0].get("label") or lookup[0].get("entity_type") or "symbol").lower()
+            return {
+                "impacted": [],
+                "note": (
+                    f"'{symbol}' exists as a {label} but has no upstream CALLS paths. "
+                    f"It may be a leaf function or a variable. Try get_callers "
+                    f"or search_code to find its relationships."
+                ),
+            }
+        return {
+            "impacted": [],
+            "note": (
+                f"'{symbol}' not found in the code graph. Verify the name or use "
+                f"search_code to locate it first."
+            ),
+        }
 
     def _get_architecture(self, repo_id: str) -> dict[str, Any]:
         try:

@@ -83,6 +83,11 @@ class Evidence:
     source: str  # lexical, dense, graph, fused, reranked
     rank: int = 0
     provenance: Optional["Provenance"] = None
+    origin: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        if not self.origin:
+            self.origin = self.source
 
 
 @dataclass

@@ -26,9 +26,11 @@ NLI_TRUNCATE_CHARS = 512 * 4  # §23.7 truncation
 class NLIScorer:
     """Classify support / contradict / neutral between evidence pieces."""
 
-    _LABEL_MAP = {"entailment": "entailment", "contradiction": "contradiction",
-                  "neutral": "neutral", "LABEL_0": "entailment",
-                  "LABEL_1": "neutral", "LABEL_2": "contradiction"}
+    _LABEL_MAP = {
+        "entailment": "entailment", "contradiction": "contradiction", "neutral": "neutral",
+        "label_0": "entailment", "label_1": "neutral", "label_2": "contradiction",
+        "LABEL_0": "entailment", "LABEL_1": "neutral", "LABEL_2": "contradiction",
+    }
 
     def __init__(self, model_name: str | None = None) -> None:
         from app.config import get_settings
@@ -61,6 +63,18 @@ class NLIScorer:
                                 for k, v in self._model.config.id2label.items()}
                         elif "ettinx" in self.model_name.lower():
                             self._id2label = {0: "contradiction", 1: "entailment", 2: "neutral"}
+
+                        # Detect generic LABEL_N and remap by model family conventions
+                        if self._id2label and all(
+                            str(v).lower().startswith("label_")
+                            for v in self._id2label.values()
+                        ):
+                            if "ettinx" in self.model_name.lower():
+                                self._id2label = {0: "contradiction", 1: "entailment", 2: "neutral"}
+                            else:
+                                self._id2label = {0: "entailment", 1: "neutral", 2: "contradiction"}
+                            logger.info(f"NLI label remap applied: {self._id2label}")
+
                         logger.info(f"NLI model loaded successfully: {self.model_name} on {self._device}")
                     except Exception as exc:
                         logger.error(f"CRITICAL: NLI model '{self.model_name}' failed to load ({exc})")

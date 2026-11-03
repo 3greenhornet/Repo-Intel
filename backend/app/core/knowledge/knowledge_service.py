@@ -13,6 +13,7 @@ of replacing them (FIX-012) and invalidate Phase 2 caches (FIX-014).
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Callable
@@ -109,6 +110,17 @@ class Phase1Pipeline:
                 repo_path, snapshot.files, code_intelligence=code_intelligence, persist_to_db=False)
             findings += run_sonarqube(repo_path, snapshot.repo_id)
             findings += run_codeql(repo_path, snapshot.repo_id)
+
+            # Gap analysis (gated — default off)
+            if os.environ.get("ENABLE_GAP_ANALYSIS", "0") == "1":
+                from app.core.analysis.gap_analyzer import analyze_gaps
+                gap_findings = analyze_gaps(repo_path, snapshot.files, code_intelligence)
+                findings += gap_findings
+                report.setdefault("phases", {})["gap_analysis"] = {
+                    "findings": len(gap_findings),
+                    "by_type": _count_findings_by(gap_findings, "finding_type"),
+                }
+
             report["phases"]["analysis"] = {
                 "findings": len(findings),
                 "tools": sorted({f.tool for f in findings}),
@@ -127,6 +139,22 @@ class Phase1Pipeline:
             # ---- STEP 3: knowledge base (4 stores) -----------------------------------
             t0 = time.monotonic()
             graph_stats = self.graph_store.build_graph(snapshot, code_intelligence, findings)
+
+            # Intent check — MUST run after graph is built, with repo_id scoping (gated — default off)
+            if os.environ.get("ENABLE_INTENT_LAYER", "0") == "1":
+                from app.core.analysis.intent_checker import load_intent, check_intent
+                intent = load_intent(repo_path)
+                if intent:
+                    intent_findings = check_intent(
+                        repo_path, self.graph_store, intent, repo_id=snapshot.repo_id
+                    )
+                    findings += intent_findings
+                    report.setdefault("phases", {})["intent_check"] = {"findings": len(intent_findings)}
+                else:
+                    report.setdefault("phases", {})["intent_check"] = {
+                        "findings": 0,
+                        "status": "no architecture.yml — intent layer not checked",
+                    }
 
             chunks = self._build_chunks(snapshot, code_intelligence, findings)
             vector_stats = self.vector_indexer.build_vector_index(snapshot.repo_id, chunks)
@@ -380,7 +408,7 @@ class Phase1Pipeline:
         for pr in snapshot.pull_requests:
             chunks.append(chunk_issue(snapshot.repo_id, pr))
         for finding in findings:
-            chunks.append(chunk_finding(snapshot.repo_id, finding))
+            chunks.append(chunk_finding(snapshot.repo_id, finding, repo_path=repo_path))
 
         return chunks
 
@@ -399,7 +427,7 @@ class Phase1Pipeline:
                 continue
             chunks.extend(chunk_file(repo_id, file, content, symbols))
         for finding in findings:
-            chunks.append(chunk_finding(repo_id, finding))
+            chunks.append(chunk_finding(repo_id, finding, repo_path=repo_path))
         return chunks
 
     # -------------------------------------------------------------- health info
@@ -409,3 +437,11 @@ class Phase1Pipeline:
             "vector_index": self.vector_indexer.stats(),
             "repositories": self.db.list_repositories(),
         }
+
+
+def _count_findings_by(findings: list, attr: str) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for f in findings:
+        k = getattr(f, attr, "unknown") or "unknown"
+        out[k] = out.get(k, 0) + 1
+    return out

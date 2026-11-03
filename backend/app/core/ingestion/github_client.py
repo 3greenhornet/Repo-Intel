@@ -184,6 +184,10 @@ def _parse_dt(value: str | None):
 
 
 def resolve_repo_id(repo_url: str) -> str:
-    """Stable repo id (uuid5 of the normalized URL)."""
-    normalized = repo_url.strip().removesuffix(".git").lower()
+    """Stable repo id (uuid5 of the normalized URL). Case-sensitive for paths."""
+    clean = repo_url.strip().removesuffix(".git")
+    if clean.startswith(("http://", "https://", "git@")):
+        normalized = clean.lower()
+    else:
+        normalized = clean
     return str(uuid.uuid5(uuid.NAMESPACE_URL, normalized))

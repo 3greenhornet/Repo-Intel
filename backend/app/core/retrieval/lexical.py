@@ -82,7 +82,7 @@ class LexicalIndex:
         base = settings.faiss_dir
         base.mkdir(parents=True, exist_ok=True)
         with open(base / f"{repo_id}_bm25.pkl", "wb") as f:
-            pickle.dump({"bm25": self.bm25, "chunk_ids": self.chunk_ids}, f)
+            pickle.dump({"bm25": self.bm25, "chunk_ids": self.chunk_ids, "chunks": self.chunks}, f)
 
     def load(self, repo_id: str) -> bool:
         settings = get_settings()
@@ -93,4 +93,5 @@ class LexicalIndex:
             data = pickle.load(f)
         self.bm25 = data["bm25"]
         self.chunk_ids = data["chunk_ids"]
+        self.chunks = data.get("chunks", {})
         return True

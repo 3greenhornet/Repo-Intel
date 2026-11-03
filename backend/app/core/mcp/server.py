@@ -76,6 +76,17 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {
          "repo_id": {"type": "string"}, "symbol": {"type": "string"}},
          "required": ["repo_id", "symbol"]}},
+    {"name": "list_gaps",
+     "description": "List codebase gaps: untested modules, missing docstrings, incomplete features, and unguarded I/O.",
+     "inputSchema": {"type": "object", "properties": {
+         "repo_id": {"type": "string"},
+         "gap_type": {"type": "string", "enum": ["all", "test_gap", "doc_gap", "incomplete_feature", "error_handling_gap"]}},
+         "required": ["repo_id"]}},
+    {"name": "get_health_score",
+     "description": "Get the aggregate codebase health score and grade.",
+     "inputSchema": {"type": "object", "properties": {
+         "repo_id": {"type": "string"}},
+         "required": ["repo_id"]}},
 ]
 
 DISCOVERY = {
@@ -158,6 +169,44 @@ def handle_tool(name: str, arguments: dict) -> dict:
                 "hub_degree": next((h[1] for h in arch.get("top_hub_symbols", []) if h[0] == symbol), 0),
             }, default=str)}]
         }
+
+    if name == "list_gaps":
+        gap_type = arguments.get("gap_type", "all")
+        types = (
+            ["test_gap", "doc_gap", "incomplete_feature", "error_handling_gap"]
+            if gap_type == "all" else [gap_type]
+        )
+        all_gaps = []
+        for gt in types:
+            all_gaps.extend(phase1.db.get_findings(repo_id, finding_type=gt, limit=200))
+        by_type: dict[str, int] = {}
+        for g in all_gaps:
+            ft = g.get("finding_type") or "unknown"
+            by_type[ft] = by_type.get(ft, 0) + 1
+        return {"content": [{"type": "text", "text": json.dumps({
+            "repo_id": repo_id, "gap_type": gap_type,
+            "total": len(all_gaps), "by_type": by_type,
+            "findings": all_gaps[:50],
+        }, default=str)}]}
+
+    if name == "get_health_score":
+        findings = phase1.db.get_findings(repo_id, limit=10000)
+        by_sev: dict[str, int] = {}
+        for f in findings:
+            s = f.get("severity") or "info"
+            by_sev[s] = by_sev.get(s, 0) + 1
+        penalty = (
+            by_sev.get("blocker", 0) * 10
+            + by_sev.get("critical", 0) * 5
+            + by_sev.get("major", 0) * 1
+            + by_sev.get("minor", 0) * 0.1
+        )
+        score = max(0, round(100 - penalty, 1))
+        grade = "A" if score >= 90 else "B" if score >= 75 else "C" if score >= 60 else "D"
+        return {"content": [{"type": "text", "text": json.dumps({
+            "repo_id": repo_id, "health_score": score, "grade": grade,
+            "by_severity": by_sev, "total_findings": len(findings),
+        }, default=str)}]}
 
     return {"content": [{"type": "text", "text": f"Unknown tool {name}"}]}
 

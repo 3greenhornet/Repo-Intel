@@ -94,7 +94,7 @@ $requiredFiles = @(
     "backend/app/core/knowledge/vector_indexer.py",
     "backend/app/core/retrieval/reranker.py",
     "backend/app/core/agent/investigator.py",
-    "backend/app/reasoning/query_pipeline.py",
+    "backend/app/core/reasoning/query_pipeline.py",
     "backend/app/static/index.html",
     "backend/requirements.txt",
     "demo_evidence/eval_results.json"

@@ -195,10 +195,35 @@ def chunk_issue(repo_id: str, issue) -> Chunk:
     )
 
 
-def chunk_finding(repo_id: str, finding) -> Chunk:
+def chunk_finding(repo_id: str, finding, repo_path: str | Path | None = None) -> Chunk:
     """Findings become retrievable evidence chunks (Store C ↔ Store B link)."""
+    snippet = ""
+    target_path: Path | None = None
+    if repo_path and finding.file_path:
+        cand = Path(repo_path) / finding.file_path
+        if cand.exists() and cand.is_file():
+            target_path = cand
+    if not target_path and finding.file_path:
+        for cand in [Path("data/repos") / repo_id / finding.file_path,
+                     Path("data/repos") / finding.file_path]:
+            if cand.exists() and cand.is_file():
+                target_path = cand
+                break
+
+    if target_path:
+        try:
+            lines = target_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+            line_no = finding.line_start or 1
+            start = max(0, line_no - 4)
+            end = min(len(lines), (finding.line_end or line_no) + 3)
+            snippet_lines = [f"{i+1:4d} | {lines[i]}" for i in range(start, end)]
+            if snippet_lines:
+                snippet = f"\n\nContext source code ({finding.file_path}:{start+1}-{end}):\n" + "\n".join(snippet_lines)
+        except Exception:
+            pass
+
     content = (f"[{finding.severity.upper()}] {finding.rule_id} in {finding.file_path}:"
-               f"{finding.line_start}\n{finding.message}")
+               f"{finding.line_start}\n{finding.message}{snippet}")
     return Chunk(
         id="", repo_id=repo_id, file_path=finding.file_path, content=content,
         chunk_type="finding", start_line=finding.line_start, end_line=finding.line_end,

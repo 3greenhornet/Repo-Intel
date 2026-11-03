@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -76,28 +77,28 @@ app = FastAPI(
     description="LLM-powered repository intelligence platform (implementation of the "
                 "RepoIntel AI specification)",
 )
-_rate_limiter = get_rate_limiter()
+_rate_limiter = None
+
+
+def _get_rate_limiter():
+    global _rate_limiter
+    if _rate_limiter is None:
+        _rate_limiter = get_rate_limiter()
+    return _rate_limiter
+
+
 _phase1: Phase1Pipeline | None = None
 _phase2: Phase2Pipeline | None = None
+_pipeline_lock = threading.Lock()
 
 
 def get_pipelines() -> tuple[Phase1Pipeline, Phase2Pipeline]:
     global _phase1, _phase2
-    if _phase1 is None:
-        _phase1 = Phase1Pipeline()
-        _phase2 = Phase2Pipeline(_phase1)
-    return _phase1, _phase2
-
-
-@app.middleware("http")
-async def request_id_middleware(request: Request, call_next):
-    """FIX-046: propagate a request id through every log line of a request.
-    Must be registered BEFORE the rate limiter so ids exist for rate-limit logs."""
-    rid = request.headers.get("x-request-id") or str(uuid.uuid4())
-    set_request_id(rid)
-    response = await call_next(request)
-    response.headers["x-request-id"] = rid
-    return response
+    with _pipeline_lock:
+        if _phase1 is None:
+            _phase1 = Phase1Pipeline()
+            _phase2 = Phase2Pipeline(_phase1)
+        return _phase1, _phase2
 
 
 @app.middleware("http")
@@ -106,13 +107,31 @@ async def rate_limit_middleware(request: Request, call_next):
     if request.url.path in ("/api/v1/health", "/metrics", "/"):
         return await call_next(request)
     user = request.headers.get("x-api-key") or (request.client.host if request.client else "anon")
-    if not _rate_limiter.is_allowed(user):
+    limiter = _get_rate_limiter()
+    if not limiter.is_allowed(user):
         return JSONResponse(
             status_code=429,
             content={"detail": "Rate limit exceeded. Try again later."},
             headers={"Retry-After": "1"},
         )
+    # Opportunistic prune to prevent unbounded memory growth
+    if hasattr(limiter, "_state") and len(limiter._state) > 10000:
+        try:
+            limiter.prune()
+        except Exception:
+            pass
     return await call_next(request)
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """FIX-046: propagate a request id through every log line of a request.
+    Must be registered after the rate limiter in file order so request_id runs as the outer middleware."""
+    rid = request.headers.get("x-request-id") or str(uuid.uuid4())
+    set_request_id(rid)
+    response = await call_next(request)
+    response.headers["x-request-id"] = rid
+    return response
 
 
 # ------------------------------------------------------------------ auth (FIX-030)
@@ -388,8 +407,8 @@ async def ingest_update(repo_id: str, user: dict = Depends(require_auth)):
 
 
 @app.get("/api/v1/findings/{repo_id}")
-async def findings(repo_id: str, severity: str | None = None,
-                   finding_type: str | None = None, limit: int = 200):
+def findings(repo_id: str, severity: str | None = None,
+             finding_type: str | None = None, limit: int = 200):
     """§10.3.2 GET /api/v1/findings/{repo_id}."""
     phase1, _ = get_pipelines()
     rows = phase1.db.get_findings(repo_id, severity=severity,
@@ -398,7 +417,7 @@ async def findings(repo_id: str, severity: str | None = None,
 
 
 @app.get("/api/v1/findings/{repo_id}/recommendations")
-async def recommendations(repo_id: str, limit: int = 10):
+def recommendations(repo_id: str, limit: int = 10):
     """§11.2 explainable recommendations for top findings."""
     phase1, phase2 = get_pipelines()
     phase1.restore_knowledge(repo_id)
@@ -431,7 +450,7 @@ async def recommendations(repo_id: str, limit: int = 10):
 
 
 @app.get("/api/v1/findings/{repo_id}/predictions/explain")
-async def explain_quality_prediction(repo_id: str, file_path: str):
+def explain_quality_prediction(repo_id: str, file_path: str):
     """XAI (§Task 4 & Etch Detail 4): explain defect/smell prediction using TreeSHAP."""
     phase1, _ = get_pipelines()
     phase1.restore_knowledge(repo_id)
@@ -506,8 +525,157 @@ async def repo_detail(repo_id: str):
             "queries": qstats}
 
 
+@app.get("/api/v1/repos/{repo_id}/gaps")
+async def get_gaps(repo_id: str):
+    """Return all gap findings (test/doc/incomplete/error handling)."""
+    phase1, _ = get_pipelines()
+    if phase1.db.get_repository(repo_id) is None:
+        raise HTTPException(status_code=404, detail="Repository not found")
+    gap_types = ["test_gap", "doc_gap", "incomplete_feature", "error_handling_gap"]
+    all_gaps = []
+    for gt in gap_types:
+        rows = phase1.db.get_findings(repo_id, finding_type=gt, limit=200)
+        all_gaps.extend(rows)
+    by_type: dict[str, int] = {}
+    for g in all_gaps:
+        ft = g.get("finding_type") or "unknown"
+        by_type[ft] = by_type.get(ft, 0) + 1
+    return {
+        "repo_id": repo_id,
+        "total_gaps": len(all_gaps),
+        "by_type": by_type,
+        "findings": all_gaps,
+    }
+
+
+@app.get("/api/v1/repos/{repo_id}/health-score")
+async def get_health_score(repo_id: str):
+    """Aggregate codebase health score from findings."""
+    phase1, _ = get_pipelines()
+    repo = phase1.db.get_repository(repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail="Repository not found")
+    findings = phase1.db.get_findings(repo_id, limit=10000)
+    by_sev: dict[str, int] = {}
+    by_type: dict[str, int] = {}
+    for f in findings:
+        sev = f.get("severity") or "info"
+        ft = f.get("finding_type") or "unknown"
+        by_sev[sev] = by_sev.get(sev, 0) + 1
+        by_type[ft] = by_type.get(ft, 0) + 1
+
+    penalty = (
+        by_sev.get("blocker", 0) * 10
+        + by_sev.get("critical", 0) * 5
+        + by_sev.get("major", 0) * 1
+        + by_sev.get("minor", 0) * 0.1
+    )
+    score = max(0, round(100 - penalty, 1))
+    return {
+        "repo_id": repo_id,
+        "health_score": score,
+        "grade": "A" if score >= 90 else "B" if score >= 75 else "C" if score >= 60 else "D",
+        "by_severity": by_sev,
+        "by_type": by_type,
+        "total_findings": len(findings),
+    }
+
+
+@app.get("/api/v1/repos/{repo_id}/intent")
+async def get_intent(repo_id: str):
+    """Return intent violations (if architecture.yml exists)."""
+    phase1, _ = get_pipelines()
+    if phase1.db.get_repository(repo_id) is None:
+        raise HTTPException(status_code=404, detail="Repository not found")
+    violations = phase1.db.get_findings(repo_id, finding_type="architecture_violation", limit=200)
+    return {
+        "repo_id": repo_id,
+        "has_intent": len(violations) > 0 or True,
+        "violations": violations,
+        "total": len(violations),
+    }
+
+
+@app.get("/api/v1/repos/{repo_id}/file")
+def get_file_content(
+    repo_id: str,
+    path: str,
+    start: int | None = None,
+    end: int | None = None,
+    start_line: int | None = None,
+    end_line: int | None = None,
+    context: int = 3,
+):
+    """Return file content around a specific line range with strict path traversal guard."""
+    phase1, _ = get_pipelines()
+    phase1.restore_knowledge(repo_id)
+
+    record = phase1.db.get_repository(repo_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    # Resolve repository base directory on disk
+    base_candidates = [
+        phase1._repo_paths.get(repo_id),
+        Path("data/repos") / repo_id,
+        Path("data/repos") / (record.get("name") or ""),
+        Path(record.get("url") or ""),
+    ]
+    base: Path | None = None
+    for cand in base_candidates:
+        if cand:
+            p = Path(cand).resolve()
+            if p.is_dir():
+                base = p
+                break
+
+    if base is None:
+        raise HTTPException(status_code=404, detail="Repository files directory not found on disk")
+
+    # Strict Path Traversal Guard:
+    # Resolve against base and ensure target_file is strictly inside base
+    try:
+        clean_path = path.replace("\\", "/").lstrip("/")
+        target_file = (base / clean_path).resolve()
+        target_file.relative_to(base)
+    except (ValueError, Exception):
+        raise HTTPException(status_code=400, detail="Path traversal forbidden")
+
+    if not target_file.is_file():
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+
+    try:
+        lines = target_file.read_text(encoding="utf-8", errors="replace").splitlines()
+    except Exception as exc:
+        raise HTTPException(500, f"Cannot read file: {exc}")
+
+    effective_start = start if start is not None else (start_line if start_line is not None else 1)
+    effective_end = end if end is not None else (end_line if end_line is not None else len(lines))
+
+    ctx_start = max(1, effective_start - context)
+    ctx_end = min(len(lines), effective_end + context)
+
+    return {
+        "path": path,
+        "absolute_path": str(target_file),
+        "start": effective_start,
+        "end": effective_end,
+        "start_line": effective_start,
+        "end_line": effective_end,
+        "context_start": ctx_start,
+        "context_end": ctx_end,
+        "total_lines": len(lines),
+        "content": "\n".join(lines[effective_start - 1 : effective_end]),
+        "lines": [
+            {"n": i, "text": lines[i - 1]}
+            for i in range(ctx_start, ctx_end + 1)
+        ],
+        "language": target_file.suffix.lstrip("."),
+    }
+
+
 @app.get("/api/v1/architecture/{repo_id}")
-async def architecture(repo_id: str):
+def architecture(repo_id: str):
     """MCP tool get_architecture (§10.3.1) exposed over REST."""
     phase1, _ = get_pipelines()
     phase1.restore_knowledge(repo_id)
@@ -515,7 +683,7 @@ async def architecture(repo_id: str):
 
 
 @app.get("/api/v1/impact/{repo_id}")
-async def impact(repo_id: str, symbol: str):
+def impact(repo_id: str, symbol: str):
     """Impact analysis for a symbol (§7.3 impact query)."""
     phase1, _ = get_pipelines()
     phase1.restore_knowledge(repo_id)
@@ -545,8 +713,18 @@ async def health():
     components["llm_provider"] = phase2.llm.provider_name
     components["nli_model"] = phase2.nli.model_name
     try:
-        m = phase2.nli._load()
-        components["nli_status"] = "ok" if m else "degraded"
+        if phase2.nli._model is not None:
+            components["nli_status"] = "ok" if phase2.nli._model else "degraded"
+        else:
+            import importlib.util
+            has_torch = importlib.util.find_spec("torch") is not None
+            has_trans = importlib.util.find_spec("transformers") is not None
+            if has_torch and has_trans:
+                components["nli_status"] = "ready"
+            else:
+                phase2.nli._model = False
+                components["nli_status"] = "degraded (lite mode)"
+                overall = "degraded"
     except Exception as exc:
         components["nli_status"] = f"degraded: {exc}"
         overall = "degraded"

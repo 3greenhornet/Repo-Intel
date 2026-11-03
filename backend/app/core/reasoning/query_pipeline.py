@@ -44,10 +44,33 @@ ABSTENTION_RE = re.compile(
     re.IGNORECASE,
 )
 
+_EXACT_ABSTENTION = re.compile(
+    r"^\s*(?:based on the (?:provided )?evidence,?\s*)?"
+    r"(?:i\s+(?:don'?t|do\s+not)\s+have\s+enough\s+evidence|"
+    r"the\s+evidence\s+is\s+insufficient|"
+    r"there\s+is\s+(?:not\s+enough|insufficient|no)\s+evidence\s+to\s+answer|"
+    r"cannot\s+answer\s+this)",
+    re.IGNORECASE,
+)
+
 
 def is_abstention(answer: str) -> bool:
-    """FIX-001: robust abstention detection across common LLM phrasings."""
-    return bool(ABSTENTION_RE.search(answer or ""))
+    """Detect whether the answer is an abstention (insufficient evidence).
+
+    Resolves both false-positives and false-negatives:
+    1. If the answer explicitly declares insufficient evidence at the start, it is an
+       abstention even if it mentions weak/speculative citations afterwards.
+    2. If no citation markers exist, any general abstention phrase marks it as abstention.
+    3. If citations exist without an opening refusal, it is a grounded substantive answer.
+    """
+    if not answer or not answer.strip():
+        return True
+    trimmed = answer.strip()
+    if _EXACT_ABSTENTION.match(trimmed):
+        return True
+    if not re.search(r"\[Evidence\s+\d+", trimmed, re.IGNORECASE):
+        return bool(ABSTENTION_RE.search(trimmed))
+    return False
 
 
 class Phase2Pipeline:
@@ -69,7 +92,6 @@ class Phase2Pipeline:
         self.nli = NLIScorer()
         self._provenance_attacher: dict[str, ProvenanceAttacher] = {}
         self._findings_cache: dict[str, list] = {}
-        self._last_contradictions: list = []
         # FIX-014: subscribe to Phase 1 invalidation events
         self.phase1.register_invalidation_listener(self.invalidate_repo)
 
@@ -102,7 +124,7 @@ class Phase2Pipeline:
         selected = self._attach_provenance(repo_id, selected)
         nli_relations = self.nli.score_nli(selected) if options.use_nli else []
         # FIX-029: extract contradictions for response + confidence penalty
-        self._last_contradictions = [
+        contradictions = [
             r for r in nli_relations if r.relation == "contradiction"]
         budget = budget_context(
             selected, llm_context_window=_cfg().llm_context_window,
@@ -120,7 +142,7 @@ class Phase2Pipeline:
 
         # ---- STEP 7: LLM reasoning -----------------------------------------------
         answer, grounded, confidence, abstained = self._reason(
-            question, context, budget, contradictions=self._last_contradictions)
+            question, context, budget, contradictions=contradictions)
 
         # ---- STEP 8: developer output ----------------------------------------------
         citations = extract_citations(answer, budget.evidence)
@@ -145,7 +167,7 @@ class Phase2Pipeline:
             contradictions=[
                 {"evidence_a": r.evidence_a, "evidence_b": r.evidence_b,
                  "confidence": round(r.confidence, 3)}
-                for r in (self._last_contradictions or [])
+                for r in (contradictions or [])
             ],
             prior_investigations=[
                 {"id": inv.get("id"), "query": inv.get("query")}

@@ -116,8 +116,30 @@ pytest backend/tests/unit backend/tests/integration           # tests
 | Rate limiting / JWT / log redaction | **real** (§24.1/24.2/24.7) |
 | Evaluation | **real** (4 baselines × 8 labeled questions, all metrics computed) |
 | Dashboard | **real** (served at `/`, no external JS deps) |
-| MCP server | **real** (5 documented tools over stdio JSON-RPC) |
-| Tests | 18 unit + 6 integration + 1 e2e |
+| MCP server | **real** (7 documented tools over stdio JSON-RPC: search, graph, blast radius, gaps, health) |
+| AST Gap Analysis | **real** (`gap_analyzer.py` — untested modules, docstring gaps, stubs, unguarded I/O) |
+| Architectural Intent Layer | **real** (`intent_checker.py` — `.repointel/architecture.yml` Reflexion model) |
+| Goal Decomposition | **real** (`planner.py` — L3 multi-hop subtask decomposition with single-hop bypass) |
+| Codebase Health Scoring | **real** (composite 0–100 score & A–F grade with live severity breakdown) |
+| Tests | 28 unit + 6 integration + 1 e2e |
+
+## Feature flags & Codebase Health gates
+
+All Phase 2 codebase health capabilities are gated behind environment flags (defaulting to `0` for 100% backward compatibility):
+
+| Flag | Default | Description |
+|---|---|---|
+| `ENABLE_GAP_ANALYSIS` | `0` | Run AST gap analysis during knowledge ingestion (`knowledge_service.py` Step 2) |
+| `ENABLE_INTENT_LAYER` | `0` | Validate declared architecture rules against graph edges in Step 3 |
+| `ENABLE_GOAL_DECOMPOSITION` | `0` | Enable L3 agentic planner for complex missions in `investigator.py` |
+
+To enable all codebase health features:
+```bash
+# Windows PowerShell
+$env:ENABLE_GAP_ANALYSIS = "1"
+$env:ENABLE_INTENT_LAYER = "1"
+$env:ENABLE_GOAL_DECOMPOSITION = "1"
+```
 
 ## Architecture & adapter layers
 

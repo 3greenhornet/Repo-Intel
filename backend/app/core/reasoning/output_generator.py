@@ -65,22 +65,50 @@ def compute_priority(finding: Finding, impact: list) -> float:
 
 
 def extract_citations(answer: str, evidence: list[Evidence]) -> list[Citation]:
-    """§11.3 parse [Evidence N] references into citation objects."""
+    """§11.3 parse [Evidence N] references into citation objects with resilient fallback."""
     citations: list[Citation] = []
+    seen_ids: set[str] = set()
+
+    def _make_citation(e: Evidence) -> Citation:
+        p = e.provenance
+        lines = [line.strip() for line in e.chunk.content.strip().splitlines() if line.strip()]
+        snippet = lines[0][:160] if lines else ""
+        return Citation(
+            evidence_id=e.chunk.id,
+            source_file=p.source_file if p else e.chunk.file_path,
+            line_start=(p.line_start if p else e.chunk.start_line) or 0,
+            line_end=(p.line_end if p else e.chunk.end_line) or 0,
+            symbol_id=(p.symbol_id if p else e.chunk.symbol_id),
+            commit_hash=(p.commit_hash if p else None),
+            snippet=snippet,
+        )
+
     for n in _citation_numbers(answer):
-        if n <= len(evidence):
+        if 1 <= n <= len(evidence):
             e = evidence[n - 1]
+            if e.chunk.id not in seen_ids:
+                seen_ids.add(e.chunk.id)
+                citations.append(_make_citation(e))
+
+    # Resilient fallback: if LLM answered without explicit [Evidence N] tags
+    if not citations and evidence:
+        ans_lower = answer.lower()
+        for e in evidence:
             p = e.provenance
-            snippet = e.chunk.content.strip().splitlines()
-            citations.append(Citation(
-                evidence_id=e.chunk.id,
-                source_file=p.source_file if p else e.chunk.file_path,
-                line_start=(p.line_start if p else e.chunk.start_line) or 0,
-                line_end=(p.line_end if p else e.chunk.end_line) or 0,
-                symbol_id=(p.symbol_id if p else e.chunk.symbol_id),
-                commit_hash=(p.commit_hash if p else None),
-                snippet=snippet[0][:160] if snippet else "",
-            ))
+            fpath = p.source_file if p else e.chunk.file_path
+            fname = fpath.replace("\\", "/").split("/")[-1].lower()
+            sym = (e.chunk.symbol_name or "").lower()
+            if (fname and len(fname) > 3 and fname in ans_lower) or (sym and len(sym) > 3 and sym in ans_lower):
+                if e.chunk.id not in seen_ids:
+                    seen_ids.add(e.chunk.id)
+                    citations.append(_make_citation(e))
+
+        if not citations:
+            for e in evidence[:3]:
+                if e.chunk.id not in seen_ids:
+                    seen_ids.add(e.chunk.id)
+                    citations.append(_make_citation(e))
+
     return citations
 
 
